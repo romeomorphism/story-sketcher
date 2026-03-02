@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+google-generativeai
+pillow
+volcengine-python-sdk[ark]
+pydantic
+python-multipart

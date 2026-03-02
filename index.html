@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magic Story Canvas - 魔法故事画板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts for Cuteness -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Nunito', sans-serif; overflow: hidden; }
+        h1, h2, h3, button { font-family: 'Fredoka', cursive; }
+        
+        /* Pastel Checkered Background (Picnic Table) */
+        .picnic-bg {
+            background-color: #fce7f3;
+            background-image: 
+                linear-gradient(45deg, #fbcfe8 25%, transparent 25%), 
+                linear-gradient(-45deg, #fbcfe8 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #fbcfe8 75%), 
+                linear-gradient(-45deg, transparent 75%, #fbcfe8 75%);
+            background-position: 0 0, 0 20px, 20px -20px, -20px 0px;
+            background-size: 40px 40px;
+        }
+
+        /* ----- Diverse Frame Styles ----- */
+        
+        .left-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            width: 580px;
+            flex-shrink: 0;
+            justify-content: center;
+            padding-left: 1rem;
+        }
+
+        /* 1. Story Box: Like a Mini Journal (Vertical) */
+        .story-journal {
+            background: #fffbeb; /* Cream paper */
+            border: 4px solid #fcd34d;
+            border-radius: 20px 4px 20px 4px;
+            height: 48%;
+            transform: rotate(-3deg);
+            box-shadow: 5px 8px 15px rgba(0,0,0,0.1);
+            position: relative;
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+        .story-journal:hover { transform: rotate(0) scale(1.02); z-index: 10; }
+        .journal-holes {
+            position: absolute; top: -15px; left: 20px; right: 20px; height: 30px;
+            display: flex; justify-content: space-evenly;
+        }
+        .ring { width: 12px; height: 25px; background: #94a3b8; border-radius: 10px; }
+
+        /* 2. Chat Box: Like a Retro Game Console / Phone */
+        .chat-console {
+            background: linear-gradient(to bottom, #f3e8ff, #ffffff);
+            border: 6px solid #d8b4fe;
+            border-radius: 35px;
+            height: 50%;
+            transform: rotate(2deg) translateX(10px);
+            box-shadow: -5px 8px 15px rgba(0,0,0,0.1);
+            position: relative;
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .chat-console:hover { transform: rotate(0) scale(1.02) translateX(10px); z-index: 10; }
+        .console-buttons {
+            display: flex; gap: 8px; position: absolute; top: 15px; right: 20px;
+        }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: #e9d5ff; }
+
+        /* 3. Drawing Board: Big A4 Sketchpad */
+        .drawing-easel {
+            flex-grow: 1;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 20px 40px -5px rgba(0,0,0,0.15);
+            margin: 20px;
+            transform: rotate(1deg);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            border: 12px solid white; 
+        }
+        
+        /* Washi Tape Stickers */
+        .tape {
+            position: absolute; width: 100px; height: 28px;
+            background-color: rgba(255, 255, 255, 0.4);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 50;
+            opacity: 0.8;
+            background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.5) 10px, rgba(255,255,255,0.5) 20px);
+        }
+        .tape-tl { top: -10px; left: -30px; transform: rotate(-35deg); background-color: #fda4af; } /* Pink tape */
+        .tape-tr { top: -15px; right: -25px; transform: rotate(25deg); background-color: #93c5fd; } /* Blue tape */
+        .tape-bc { bottom: -10px; left: 40%; transform: rotate(-2deg); background-color: #fde047; } /* Yellow tape */
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        .fade-in { animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes popIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+        /* Floating Pallete */
+        .wood-palette {
+            background: #fdf6e3;
+            border: 2px solid #e2e8f0;
+            border-radius: 50px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="picnic-bg h-screen w-screen overflow-hidden flex p-4 gap-2">
+
+    <!-- Left Side: Stacked Collage -->
+    <div class="left-stack">
+        
+        <!-- Element 1: Story Journal -->
+        <div class="story-journal">
+            <!-- Decorative Rings -->
+            <div class="journal-holes">
+                <div class="ring"></div><div class="ring"></div><div class="ring"></div><div class="ring"></div>
+            </div>
+            
+            <div class="mt-6 px-5 py-2 border-b-2 border-dashed border-amber-200 flex justify-between items-center decoration-wavy">
+                <span class="font-bold text-amber-600 font-sans tracking-wider">MY STORY DIARY</span>
+                <i class="fa-solid fa-star text-amber-400"></i>
+            </div>
+            
+            <div id="story-content" class="p-5 overflow-y-auto flex-grow text-slate-700 font-medium leading-loose" 
+                 style="background-image: repeating-linear-gradient(transparent, transparent 31px, #fef3c7 31px, #fef3c7 32px);">
+                <p>Once upon a time...</p>
+            </div>
+        </div>
+
+        <!-- Element 2: Chat Console -->
+        <div class="chat-console">
+            <!-- Decorative Dots -->
+            <div class="console-buttons">
+                <div class="dot bg-red-300"></div>
+                <div class="dot bg-yellow-300"></div>
+                <div class="dot bg-green-300"></div>
+            </div>
+
+            <div class="p-4 bg-purple-100 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="bg-white p-1 rounded-lg shadow-sm">
+                        <i class="fa-solid fa-gamepad text-purple-500"></i>
+                    </div>
+                    <span class="font-bold text-purple-600 text-sm">CHAT-BOY</span>
+                </div>
+                <div class="text-[10px] text-purple-400 font-mono">BAT 100%</div>
+            </div>
+
+            <div id="chat-history" class="flex-grow overflow-y-auto p-4 space-y-3 bg-white/50">
+                <div class="flex justify-start fade-in">
+                    <div class="bg-white p-2 rounded-xl rounded-tl-none border border-purple-100 text-xs text-slate-600 shadow-sm">
+                        Hello! Let's create together!
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-3 bg-purple-50">
+                <div class="flex gap-2">
+                    <input id="chat-input" type="text" class="flex-grow bg-white rounded-full px-3 py-1 text-sm outline-none border border-purple-200 focus:border-purple-400" placeholder="Message...">
+                    <button id="send-btn" class="bg-purple-500 text-white w-8 h-8 rounded-full shadow-md hover:bg-purple-600 transition-colors flex items-center justify-center">
+                        <i class="fa-solid fa-paper-plane text-xs"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Side: Big Canvas -->
+    <div class="drawing-easel group">
+        <!-- Tapes -->
+        <div class="tape tape-tl"></div>
+        <div class="tape tape-tr"></div>
+        <div class="tape tape-bc"></div>
+
+        <!-- Paper Texture overlay -->
+        <div class="absolute inset-0 pointer-events-none opacity-5" style="background-image: url('https://www.transparenttextures.com/patterns/paper.png');"></div>
+
+        <div class="relative w-full h-full" id="canvas-container">
+            <canvas id="drawing-board" class="w-full h-full block cursor-crosshair"></canvas>
+            
+            <div class="absolute top-4 left-4 z-10 pointer-events-none opacity-20 group-hover:opacity-100 transition-opacity duration-500">
+                <h1 class="text-4xl font-bold text-slate-200 uppercase tracking-widest" style="font-family: 'Fredoka One', cursive;">Story Sketcher</h1>
+            </div>
+
+            <div id="ai-loading" class="hidden absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center z-20">
+                <i class="fa-solid fa-palette text-5xl text-pink-400 animate-bounce"></i>
+                <p class="mt-4 font-bold text-pink-400">Mixing Colors...</p>
+            </div>
+        </div>
+
+        <!-- Floating Toolbar (Absolute Positioned at bottom) -->
+        <div class="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-30 wood-palette px-6 py-3 flex items-center gap-6">
+            
+            <div class="flex gap-2" id="color-palette">
+                <!-- Colors -->
+                <button class="w-8 h-8 rounded-full border-2 border-white shadow ring-1 ring-slate-200 hover:scale-125 transition-transform" style="background-color: #000000;" data-color="#000000"></button>
+                <button class="w-8 h-8 rounded-full border-2 border-white shadow ring-1 ring-slate-200 hover:scale-125 transition-transform" style="background-color: #ef4444;" data-color="#ef4444"></button>
+                <button class="w-8 h-8 rounded-full border-2 border-white shadow ring-1 ring-slate-200 hover:scale-125 transition-transform" style="background-color: #eab308;" data-color="#eab308"></button>
+                <button class="w-8 h-8 rounded-full border-2 border-white shadow ring-1 ring-slate-200 hover:scale-125 transition-transform" style="background-color: #22c55e;" data-color="#22c55e"></button>
+                <button class="w-8 h-8 rounded-full border-2 border-white shadow ring-1 ring-slate-200 hover:scale-125 transition-transform" style="background-color: #3b82f6;" data-color="#3b82f6"></button>
+                <button class="w-8 h-8 rounded-full border-2 border-white shadow ring-1 ring-slate-200 hover:scale-125 transition-transform" style="background-color: #a855f7;" data-color="#a855f7"></button>
+            </div>
+
+            <div class="h-8 w-px bg-slate-200"></div>
+
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-circle text-[6px] text-slate-300"></i>
+                <input type="range" id="brush-size" min="2" max="30" value="5" class="w-20 accent-slate-400">
+                <i class="fa-solid fa-circle text-lg text-slate-300"></i>
+            </div>
+
+             <div class="h-8 w-px bg-slate-200"></div>
+
+             <div class="flex gap-3">
+                 <button id="eraser-btn" class="text-slate-400 hover:text-pink-400 transition-colors text-xl" title="Eraser"><i class="fa-solid fa-eraser"></i></button>
+                 <button id="clear-btn" class="text-slate-400 hover:text-red-400 transition-colors text-xl" title="Clear"><i class="fa-solid fa-trash-can"></i></button>
+             </div>
+
+             <button id="done-btn" class="ml-4 bg-gradient-to-r from-pink-400 to-rose-400 text-white px-5 py-2 rounded-full font-bold shadow-lg hover:-translate-y-1 transition-transform text-sm">
+                 DONE <i class="fa-solid fa-check ml-1"></i>
+             </button>
+        </div>
+        
+        <!-- Movie Button (Top Right Absolute) -->
+        <button id="movie-btn" class="absolute top-4 right-4 z-30 bg-white/80 backdrop-blur text-indigo-500 px-3 py-1 rounded-lg border border-indigo-100 shadow-sm text-xs font-bold hover:bg-white transition-all">
+            <i class="fa-solid fa-film"></i> Movie
+        </button>
+
+    </div>
+
+    <script>
+        // --- 1. Canvas Functions ---
+        const canvas = document.getElementById('drawing-board');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('canvas-container');
+        let isDrawing = false;
+        
+        let currentTool = 'pen';
+        let currentColor = '#000000';
+        let currentSize = 5;
+        
+        function resizeCanvas() {
+            const rect = container.getBoundingClientRect();
+            canvas.width = rect.width * 2;
+            canvas.height = rect.height * 2;
+            ctx.scale(2, 2);
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            updateContext();
+        }
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(resizeCanvas, 100);
+        });
+        setTimeout(resizeCanvas, 200);
+
+        function updateContext() {
+            if (currentTool === 'eraser') {
+                ctx.strokeStyle = '#FFFFFF';
+                // Make eraser larger for usability
+                ctx.lineWidth = currentSize * 4; 
+                ctx.globalCompositeOperation = 'source-over'; 
+            } else {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = currentSize;
+            }
+        }
+
+        function startPosition(e) { isDrawing = true; draw(e); }
+        function endPosition() { isDrawing = false; ctx.beginPath(); }
+        function draw(e) {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.clientX || e.touches[0].clientX;
+            const clientY = e.clientY || e.touches[0].clientY;
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+            
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+
+        canvas.addEventListener('mousedown', startPosition);
+        canvas.addEventListener('mouseup', endPosition);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseleave', endPosition);
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startPosition(e); });
+        canvas.addEventListener('touchend', endPosition);
+        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e); });
+
+        // Tool Logic
+        document.querySelectorAll('#color-palette button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentTool = 'pen';
+                currentColor = btn.getAttribute('data-color');
+                // Visual feedback
+                document.querySelectorAll('#color-palette button').forEach(b => {
+                    b.classList.remove('ring-gray-400', 'scale-110');
+                    b.classList.add('ring-slate-200');
+                });
+                btn.classList.add('ring-gray-400', 'scale-110');
+                btn.classList.remove('ring-slate-200');
+                
+                document.getElementById('eraser-btn').classList.remove('text-pink-500');
+                updateContext();
+            });
+        });
+
+        document.getElementById('brush-size').addEventListener('input', (e) => {
+            currentSize = e.target.value;
+            updateContext();
+        });
+
+        document.getElementById('eraser-btn').addEventListener('click', function() {
+            currentTool = 'eraser';
+            this.classList.add('text-pink-500');
+            updateContext();
+        });
+
+        document.getElementById('clear-btn').addEventListener('click', () => {
+             const originalTransform = canvas.style.transform;
+             canvas.style.transition = 'transform 0.1s';
+             canvas.style.transform = 'scale(0.98)';
+             setTimeout(() => { canvas.style.transform = originalTransform; }, 100);
+             
+             ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+
+        // --- 2. API Interaction ---
+        // Dynamically determine API URL
+        const API_URL = "/api";
+        const chatHistory = document.getElementById('chat-history');
+        const storyContent = document.getElementById('story-content');
+        const loadingOverlay = document.getElementById('ai-loading');
+
+        function addMessage(sender, text) {
+            const div = document.createElement('div');
+            div.className = `flex ${sender === 'user' ? 'justify-end' : 'justify-start'} fade-in`;
+            
+            const bubbleStyle = sender === 'user' 
+                ? 'bg-purple-100 text-purple-900 rounded-tr-none border border-purple-200' 
+                : 'bg-white text-slate-600 rounded-tl-none border border-purple-100 shadow-sm';
+            
+            div.innerHTML = `<div class="max-w-[85%] p-2 rounded-xl ${bubbleStyle} text-xs font-medium">${text}</div>`;
+            chatHistory.appendChild(div);
+            chatHistory.scrollTo({ top: chatHistory.scrollHeight, behavior: 'smooth' });
+        }
+
+        document.getElementById('done-btn').addEventListener('click', async () => {
+             loadingOverlay.classList.remove('hidden');
+            try {
+                const imageBase64 = canvas.toDataURL('image/png');
+                // 获取当前故事内容作为上下文
+                const currentStory = storyContent.innerText;
+                
+                const response = await fetch(`${API_URL}/analyze-drawing`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        image_base64: imageBase64,
+                        story_context: currentStory 
+                    })
+                });
+
+                if (!response.ok) throw new Error("Backend connection failed");
+                const data = await response.json();
+
+                loadingOverlay.classList.add('hidden');
+                
+                const p = document.createElement('p');
+                p.className = "mt-4 fade-in text-amber-700 font-handwriting";
+                p.innerText = data.story_update;
+                storyContent.appendChild(p);
+                storyContent.scrollTo({ top: storyContent.scrollHeight, behavior: 'smooth' });
+
+                addMessage('user', "I finished my drawing! 🎨");
+                setTimeout(() => addMessage('ai', data.ai_question), 600);
+
+            } catch (err) {
+                loadingOverlay.classList.add('hidden');
+                console.error(err);
+                alert("Magic connection error!");
+            }
+        });
+
+        const chatInput = document.getElementById('chat-input');
+        async function handleSend() {
+            const text = chatInput.value.trim();
+            if (!text) return;
+            addMessage('user', text);
+            chatInput.value = '';
+
+            try {
+                // Get current story context
+                let storyContextSource = "";
+                const storyDiv = document.getElementById('story-content');
+                if (storyDiv) {
+                     const allText = storyDiv.innerText.trim();
+                     // If we have more content than just "Once upon a time..."
+                     if (allText.length > 25) { 
+                        storyContextSource = allText;
+                     }
+                }
+
+                const response = await fetch(`${API_URL}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        user_message: text, 
+                        story_context: storyContextSource,
+                        history: [] 
+                    })
+                });
+                const data = await response.json();
+                addMessage('ai', data.reply);
+            } catch (err) {
+                console.error(err);
+                addMessage('ai', "Signal lost! 📡");
+            }
+        }
+        document.getElementById('send-btn').addEventListener('click', handleSend);
+        chatInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') handleSend(); });
+
+        document.getElementById('movie-btn').addEventListener('click', async function() {
+            const btn = this;
+            const originalText = btn.innerHTML;
+            
+            // 1. Initial State: Loading
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Making...`;
+            btn.disabled = true;
+            
+            try {
+                const imageBase64 = canvas.toDataURL('image/png');
+                
+                // Get the latest story part
+                let storyContext = "";
+                const storyDiv = document.getElementById('story-content');
+                
+                // Try to get text content, filtering out empty lines
+                if (storyDiv) {
+                     // Check if there are specific paragraphs added by AI
+                     const paragraphs = storyDiv.querySelectorAll('p:not(:first-child)'); // ignore the "Once upon a time..." if it's p header?
+                     
+                     // Actually, let's just grab all text except the initial placeholder if it hasn't changed
+                     const allText = storyDiv.innerText.trim();
+                     if (allText !== "Once upon a time...") {
+                         // Use the last segment or full text
+                         // Let's use the last non-empty paragraph for specific action
+                         const pTags = storyDiv.querySelectorAll('p');
+                         if (pTags.length > 0) {
+                             const lastP = pTags[pTags.length - 1];
+                             storyContext = lastP.innerText;
+                             console.log("Using story context from last paragraph:", storyContext);
+                         } else {
+                             storyContext = allText;
+                         }
+                     }
+                }
+                
+                // 2. Start Generation
+                addMessage('ai', "Ooh! Making a movie magic! 🎬 Hang tight...");
+                
+                console.log("Sending to API:", { story_context: storyContext }); // Debug log
+                
+                const response = await fetch(`${API_URL}/generate-movie`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        image_base64: imageBase64,
+                        story_context: storyContext
+                    })
+                });
+                
+                if (!response.ok) throw new Error("Failed to start movie generation");
+                
+                const data = await response.json();
+                const taskId = data.movie_task_id;
+                
+                if (!taskId) throw new Error("No task ID returned");
+
+                // 3. Poll for Status
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const statusRes = await fetch(`${API_URL}/check-movie-status/${taskId}`);
+                        if (!statusRes.ok) return; // Skip this poll if network error
+                        
+                        const statusData = await statusRes.json();
+                        console.log("Movie Status:", statusData.status);
+                        
+                        if (statusData.status === 'SUCCEEDED') {
+                            clearInterval(pollInterval);
+                            
+                            // Success!
+                            btn.innerHTML = originalText;
+                            btn.disabled = false;
+                            
+                            const videoUrl = statusData.video_url; // Use url from response
+                            if (videoUrl) {
+                                addMessage('ai', `Movie is ready! 🎥 <br><a href="${videoUrl}" target="_blank" class="text-indigo-600 underline font-bold">Click to Watch</a>`);
+                                window.open(videoUrl, '_blank');
+                            } else {
+                                addMessage('ai', "Movie finished, but I can't find the reel! 📼");
+                            }
+                            
+                        } else if (statusData.status === 'FAILED') {
+                            clearInterval(pollInterval);
+                            throw new Error("Generation failed on server");
+                        }
+                        // If RUNNING or QUEUED, continue polling
+                        
+                    } catch (pollErr) {
+                        console.error("Polling error:", pollErr);
+                        clearInterval(pollInterval);
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                        addMessage('ai', "Oops, something went wrong checking the movie. 🎞️");
+                    }
+                }, 2000); // Check every 2 seconds
+
+            } catch (err) {
+                console.error(err);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                alert("Movie generation failed to start.");
+                addMessage('ai', "Sorry, I couldn't start the movie machine. 😢");
+            }
+        });
+    </script>
+</body>
+</html>
