@@ -28,14 +28,9 @@ if not IS_VERCEL:
          os.environ["HTTP_PROXY"] = f"http://127.0.0.1:{proxy_port}"
          os.environ["HTTPS_PROXY"] = f"http://127.0.0.1:{proxy_port}"
 
-# 3. Configure Gemini
+# 3. Configure Gemini (not needed for Doubao)
 if not GOOGLE_API_KEY:
-    print("Warning: GOOGLE_API_KEY is missing")
-
-genai.configure(api_key=GOOGLE_API_KEY)
-
-# 4. 修正模型名称 (目前没有 2.5，使用 1.5-flash)
-model = genai.GenerativeModel('gemini-2.5-flash')
+    print("Warning: GOOGLE_API_KEY is not required for Doubao")
 
 app = FastAPI(title="StorySketcher Gemini Backend")
 
@@ -75,7 +70,7 @@ def decode_image(base64_string):
 @app.post("/api/analyze-drawing")
 async def analyze_drawing(request: DrawingRequest):
     """
-    Vision Agent + Story Agent:
+    Vision Agent + Story Agent (Using Doubao Model):
     1. 识别画作内容 (Vision)
     2. 生成故事片段 (Story)
     3. 提出苏格拉底式问题 (Socratic Scaffolding)
@@ -83,8 +78,14 @@ async def analyze_drawing(request: DrawingRequest):
     现在支持对话历史，确保生成的故事与之前的对话和故事内容保持一致。
     """
     try:
-        # 1. 解码图片
+        # 1. 解码图片并转换为 base64
         img = decode_image(request.image_base64)
+        
+        # 将图片保存为 PNG 格式并转为 base64
+        img_bytes = io.BytesIO()
+        img.save(img_bytes, format='PNG')
+        img_bytes.seek(0)
+        image_base64 = base64.b64encode(img_bytes.getvalue()).decode('utf-8')
         
         # 2. 构建对话历史部分
         conversation_history = ""
@@ -99,7 +100,7 @@ async def analyze_drawing(request: DrawingRequest):
             conversation_history += "\n"
         
         # 3. 构造 Prompt (提示词) - 保持英文
-        prompt = f"""
+        prompt_text = f"""
         You are an AI co-creation partner named "StorySketcher" for children aged 4-10.
         
         Current Story Context (The story so far):
@@ -122,14 +123,28 @@ async def analyze_drawing(request: DrawingRequest):
         }}
         """
 
-        # 4. 调用 Gemini
-        response = model.generate_content(
-            [prompt, img],
-            generation_config={"response_mime_type": "application/json"}
+        # 4. 调用 Doubao (使用 Ark 客户端)
+        response = ark_client.chat.completions.create(
+            model="doubao-seed-1-6-251015",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt_text},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{image_base64}"
+                            }
+                        }
+                    ]
+                }
+            ]
         )
         
         # 5. 解析结果
-        result = json.loads(response.text)
+        result_text = response.choices[0].message.content
+        result = json.loads(result_text)
         
         return result
 
@@ -144,46 +159,51 @@ async def analyze_drawing(request: DrawingRequest):
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
     """
-    Story Agent (纯对话模式):
+    Story Agent (纯对话模式 - Using Doubao Model):
     继续与孩子对话，引导故事发展。
     支持对话历史，记住之前的对话内容。
     """
     try:
-        # Prompt 改为全英文，确保 AI 回复英文
-        story_context_str = request.story_context if request.story_context and len(request.story_context.strip()) > 0 else "None yet."
+        # 构建消息列表，包含对话历史
+        messages = []
         
-        # 构建对话历史部分
-        conversation_history = ""
+        # 添加系统消息
+        system_message = """You are StoryBuddy, a friendly and enthusiastic AI storytelling assistant.
+The user is a young child (4-10 years old).
+Reply in short, simple, and encouraging English. Keep the tone magical and fun."""
+        
+        messages.append({"role": "system", "content": system_message})
+        
+        # 添加之前的对话历史
         if request.history and len(request.history) > 0:
-            conversation_history = "Previous Conversation:\n"
             for msg in request.history:
                 if isinstance(msg, dict):
                     role = msg.get("role", "")
                     content = msg.get("content", "")
                     if role and content:
-                        conversation_history += f"{role}: {content}\n"
-            conversation_history += "\n"
+                        messages.append({"role": role, "content": content})
         
-        prompt = f"""
-        You are StoryBuddy, a friendly and enthusiastic AI storytelling assistant.
-        The user is a young child (4-10 years old).
+        # 添加当前用户消息和故事上下文
+        story_context_str = request.story_context if request.story_context and len(request.story_context.strip()) > 0 else "None yet."
         
-        Current Story Content:
-        "{story_context_str}"
+        current_user_message = f"""Current Story Content: "{story_context_str}"
+
+User's input: "{request.user_message}"
+
+Instructions:
+1. Your reply MUST relate to the "Current Story Content" and remember what we discussed before.
+2. If the user suggests a new idea, encourage them to draw it on the canvas to add it to the story.
+3. Be consistent with anything you said before in the conversation."""
         
-        {conversation_history}User's current input: "{request.user_message}"
+        messages.append({"role": "user", "content": current_user_message})
         
-        Instructions:
-        1. Reply in short, simple, and encouraging English.
-        2. Your reply MUST relate to the "Current Story Content" and remember what we discussed before. Keep the conversation flowing naturally from our previous chat.
-        3. If the user suggests a new idea, encourage them to draw it on the canvas to add it to the story.
-        4. Keep the tone magical and fun.
-        5. Be consistent with anything you said or promised in the previous conversation.
-        """
+        # 调用 Doubao (使用 Ark 客户端)
+        response = ark_client.chat.completions.create(
+            model="doubao-seed-1-6-251015",
+            messages=messages
+        )
         
-        response = model.generate_content(prompt)
-        
-        return {"reply": response.text}
+        return {"reply": response.choices[0].message.content}
 
     except Exception as e:
         print(f"Error: {e}")
