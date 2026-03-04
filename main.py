@@ -228,7 +228,10 @@ Instructions:
 @app.post("/api/generate-movie")
 async def generate_movie(request: DrawingRequest):
     """
-    Animation Agent (占位符)
+    Animation Agent with Story Narration:
+    1. 基于画作和故事生成动画
+    2. 添加英文讲述故事的语音
+    3. 创建完整的故事视频
     """
     try:
         # Decode the drawn image
@@ -251,15 +254,32 @@ async def generate_movie(request: DrawingRequest):
             # If it's just the placeholder, ignore it for prompt purposes
             story_text = ""
             
-        # Use story context as prompt if available, otherwise fallback
-        base_prompt = "Create a vivid, child-friendly animation based on this drawing. Make the drawing items move lively. The background narative is" + f" '{story_text}'."
-        prompt_text = f"{base_prompt} Story context: {story_text}" if story_text else "Create a 10-second animation based on this drawing. Make it lively and fun, suitable for children. Focus on the main characters and add simple movements like waving, jumping, or smiling."
+        # Create enhanced prompt that includes story narration requirement
+        # Ensure the video includes English narration
+        base_prompt = f"""Create a vivid, child-friendly animation based on this drawing:
+        
+STORY NARRATION (IMPORTANT):
+Add clear English narration/voiceover that tells the following story:
+"{story_text}"
+
+VIDEO INSTRUCTIONS:
+- Make the drawing items move lively and expressively
+- Synchronize the animation with the story narration
+- Keep the narration clear, slow, and simple for children aged 4-10
+- The narration should match the animation and bring the story to life
+- Use a warm, friendly, enthusiastic tone for the narration
+- Duration: 10 seconds"""
+        
+        prompt_text = base_prompt if story_text else """Create a 10-second animation based on this drawing. 
+Make it lively and fun, suitable for children. 
+Focus on the main characters and add simple movements like waving, jumping, or smiling.
+Add cheerful background sounds or music."""
         
         # Ensure prompt is not too long (API limits)
-        if len(prompt_text) > 500:
-            prompt_text = prompt_text[:500]
+        if len(prompt_text) > 800:
+            prompt_text = prompt_text[:800]
         
-        print(f"Generating movie with prompt: {prompt_text}")
+        print(f"Generating movie with narration prompt: {prompt_text}")
 
         create_movie_response = ark_client.content_generation.tasks.create(
             model="doubao-seedance-1-5-pro-251215",
@@ -275,7 +295,7 @@ async def generate_movie(request: DrawingRequest):
                     }
                 }
             ],
-            generate_audio=True,
+            generate_audio=True,  # Generate audio with story narration
             ratio="adaptive",
             duration=10,
             watermark=False,
