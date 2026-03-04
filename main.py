@@ -306,9 +306,9 @@ VIDEO INSTRUCTIONS:
 - Keep the narration clear, slow, and simple for children aged 4-10
 - The narration should match the animation and bring the story to life
 - Use a warm, friendly, enthusiastic tone for the narration
-- Duration: 15 seconds"""
+- Duration: 10 seconds"""
         
-        prompt_text = base_prompt if story_text else f"""Create a 15-second animation based on this drawing.
+        prompt_text = base_prompt if story_text else f"""Create a 10-second animation based on this drawing.
 Make it lively and fun, suitable for children. 
 Focus on the main characters and add simple movements like waving, jumping, or smiling.
     Add cheerful background sounds or music.
@@ -336,7 +336,7 @@ Focus on the main characters and add simple movements like waving, jumping, or s
             ],
             generate_audio=True,  # Generate audio with story narration
             ratio="adaptive",
-            duration=15,
+            duration=10,
             watermark=False,
         )
         
