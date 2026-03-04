@@ -52,11 +52,16 @@ class DrawingRequest(BaseModel):
     image_base64: str
     story_context: str = ""
     history: list = []
+    movie_language: str = "en"
 
 class ChatRequest(BaseModel):
     user_message: str
     story_context: str = ""
     history: list = []
+
+class TextToSpeechRequest(BaseModel):
+    text: str
+    language: str = "en-US"  # Default to English
 
 # --- 辅助函数：处理 Base64 图片 ---
 def decode_image(base64_string):
@@ -230,7 +235,7 @@ async def generate_movie(request: DrawingRequest):
     """
     Animation Agent with Story Narration:
     1. 基于画作和故事生成动画
-    2. 添加英文讲述故事的语音
+    2. 添加所选语言讲述故事的语音
     3. 创建完整的故事视频
     """
     try:
@@ -253,14 +258,28 @@ async def generate_movie(request: DrawingRequest):
         if "Once upon a time..." in story_text and len(story_text) < 30:
             # If it's just the placeholder, ignore it for prompt purposes
             story_text = ""
+
+        # Language selection (default English)
+        selected_language = (request.movie_language or "en").lower()
+        language_map = {
+            "en": "English",
+            "zh": "Chinese",
+            "de": "German"
+        }
+        narration_language = language_map.get(selected_language, "English")
             
         # Create enhanced prompt that includes story narration requirement
-        # Ensure the video includes English narration
+        # Ensure the video includes narration in selected language
         base_prompt = f"""Create a vivid, child-friendly animation based on this drawing:
         
 STORY NARRATION (IMPORTANT):
-Add clear English narration/voiceover that tells the following story:
+    Add clear {narration_language} narration/voiceover that tells the following story:
 "{story_text}"
+
+    LANGUAGE RULES:
+    - The narration language MUST be {narration_language}
+    - If the story text is in another language, translate it into {narration_language} for narration
+    - Keep wording simple and child-friendly in {narration_language}
 
 VIDEO INSTRUCTIONS:
 - Make the drawing items move lively and expressively
@@ -270,16 +289,17 @@ VIDEO INSTRUCTIONS:
 - Use a warm, friendly, enthusiastic tone for the narration
 - Duration: 10 seconds"""
         
-        prompt_text = base_prompt if story_text else """Create a 10-second animation based on this drawing. 
+        prompt_text = base_prompt if story_text else f"""Create a 10-second animation based on this drawing.
 Make it lively and fun, suitable for children. 
 Focus on the main characters and add simple movements like waving, jumping, or smiling.
-Add cheerful background sounds or music."""
+    Add cheerful background sounds or music.
+    Narration/voice language MUST be {narration_language}."""
         
         # Ensure prompt is not too long (API limits)
         if len(prompt_text) > 800:
             prompt_text = prompt_text[:800]
         
-        print(f"Generating movie with narration prompt: {prompt_text}")
+        print(f"Generating movie in language [{selected_language}] with narration prompt: {prompt_text}")
 
         create_movie_response = ark_client.content_generation.tasks.create(
             model="doubao-seedance-1-5-pro-251215",
@@ -373,6 +393,70 @@ async def check_movie_status(task_id: str):
     except Exception as e:
         print(f"Error checking status: {e}")
         return {"status": "ERROR", "message": str(e)}
+
+
+@app.post("/api/text-to-speech")
+async def text_to_speech(request: TextToSpeechRequest):
+    """
+    Text-to-Speech API:
+    Convert text to speech audio and return as base64 encoded audio data.
+    This allows the chatbot buttons to play audio responses.
+    """
+    try:
+        # Import requests for TTS API call
+        import requests
+        
+        # Validate input
+        if not request.text or len(request.text.strip()) == 0:
+            return {"error": "Text cannot be empty"}
+        
+        # Truncate text if too long (TTS has character limits, typically 1000-2000 chars)
+        text_to_convert = request.text[:500]  # Limit to 500 chars for efficiency
+        
+        # Use Ark client for TTS (if available) or use a simple TTS approach
+        # For now, we'll use a text-to-speech approach via the Ark platform
+        # or external TTS service
+        
+        try:
+            # Try using Ark's TTS capability if available
+            # This is a fallback - you may need to use a dedicated TTS API
+            tts_response = ark_client.audio.speech.create(
+                model="tts-model",  # Specify TTS model
+                input=text_to_convert,
+                voice="en-US-Neural2-A",  # English voice
+                response_format="mp3"
+            )
+            
+            # If successful, return the audio data
+            return {
+                "success": True,
+                "audio": base64.b64encode(tts_response.content).decode('utf-8') if hasattr(tts_response, 'content') else tts_response
+            }
+        except:
+            # Fallback: Use external TTS service (like Google Cloud TTS or similar)
+            # For this example, we'll return a placeholder message
+            print("Ark TTS not available, attempting alternative TTS method...")
+            
+            # You can integrate with:
+            # 1. Google Cloud Text-to-Speech API
+            # 2. Azure Text-to-Speech API
+            # 3. Amazon Polly
+            # 4. Other TTS services
+            
+            # For now, return a simple message asking to configure TTS
+            return {
+                "success": False,
+                "message": "TTS service temporarily unavailable. Please configure a TTS API.",
+                "text": text_to_convert
+            }
+    
+    except Exception as e:
+        print(f"TTS Error: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Failed to convert text to speech"
+        }
     
 
 if __name__ == "__main__":
