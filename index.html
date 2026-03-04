@@ -364,6 +364,10 @@
         const storyContent = document.getElementById('story-content');
         const loadingOverlay = document.getElementById('ai-loading');
         let selectedMovieLanguage = 'en';
+        
+        // Track story continuation: separate initial text from AI-generated parts
+        const STORY_INIT_TEXT = "Once upon a time...";
+        let storyParts = []; // Store only AI-generated story segments
 
         // Movie language selector (default: EN)
         document.querySelectorAll('.movie-lang-btn').forEach(btn => {
@@ -395,8 +399,11 @@
              loadingOverlay.classList.remove('hidden');
             try {
                 const imageBase64 = canvas.toDataURL('image/png');
-                // 获取当前故事内容作为上下文
-                const currentStory = storyContent.innerText;
+                // Build complete story context: initial text + all previously generated parts
+                let currentStory = STORY_INIT_TEXT;
+                if (storyParts.length > 0) {
+                    currentStory += "\n" + storyParts.join("\n");
+                }
                 
                 const response = await fetch(`${API_URL}/analyze-drawing`, {
                     method: 'POST',
@@ -415,6 +422,7 @@
                 const p = document.createElement('p');
                 p.className = "mt-4 fade-in text-amber-700 font-handwriting";
                 p.innerText = data.story_update;
+                storyParts.push(data.story_update); // Track new story segment
                 storyContent.appendChild(p);
                 storyContent.scrollTo({ top: storyContent.scrollHeight, behavior: 'smooth' });
 
@@ -436,15 +444,10 @@
             chatInput.value = '';
 
             try {
-                // Get current story context
-                let storyContextSource = "";
-                const storyDiv = document.getElementById('story-content');
-                if (storyDiv) {
-                     const allText = storyDiv.innerText.trim();
-                     // If we have more content than just "Once upon a time..."
-                     if (allText.length > 25) { 
-                        storyContextSource = allText;
-                     }
+                // Get complete story context using storyParts array
+                let storyContextSource = STORY_INIT_TEXT;
+                if (storyParts.length > 0) {
+                    storyContextSource += "\n" + storyParts.join("\n");
                 }
 
                 const response = await fetch(`${API_URL}/chat`, {
@@ -470,6 +473,12 @@
             const btn = this;
             const originalText = btn.innerHTML;
             
+            // Build the COMPLETE story for movie narration (initial + all AI-generated parts)
+            let completeStory = STORY_INIT_TEXT;
+            if (storyParts.length > 0) {
+                completeStory += "\n" + storyParts.join("\n");
+            }
+            
             // 1. Initial State: Loading
             btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Making...`;
             btn.disabled = true;
@@ -477,42 +486,17 @@
             try {
                 const imageBase64 = canvas.toDataURL('image/png');
                 
-                // Get the latest story part
-                let storyContext = "";
-                const storyDiv = document.getElementById('story-content');
-                
-                // Try to get text content, filtering out empty lines
-                if (storyDiv) {
-                     // Check if there are specific paragraphs added by AI
-                     const paragraphs = storyDiv.querySelectorAll('p:not(:first-child)'); // ignore the "Once upon a time..." if it's p header?
-                     
-                     // Actually, let's just grab all text except the initial placeholder if it hasn't changed
-                     const allText = storyDiv.innerText.trim();
-                     if (allText !== "Once upon a time...") {
-                         // Use the last segment or full text
-                         // Let's use the last non-empty paragraph for specific action
-                         const pTags = storyDiv.querySelectorAll('p');
-                         if (pTags.length > 0) {
-                             const lastP = pTags[pTags.length - 1];
-                             storyContext = lastP.innerText;
-                             console.log("Using story context from last paragraph:", storyContext);
-                         } else {
-                             storyContext = allText;
-                         }
-                     }
-                }
-                
                 // 2. Start Generation
                 addMessage('ai', "Ooh! Making a movie magic! 🎬 Hang tight...");
                 
-                console.log("Sending to API:", { story_context: storyContext }); // Debug log
+                console.log("Generating movie with complete story:", completeStory); // Debug log
                 
                 const response = await fetch(`${API_URL}/generate-movie`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         image_base64: imageBase64,
-                        story_context: storyContext,
+                        story_context: completeStory,
                         movie_language: selectedMovieLanguage
                     })
                 });
