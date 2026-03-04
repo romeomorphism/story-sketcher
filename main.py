@@ -76,6 +76,7 @@ async def analyze_drawing(request: DrawingRequest):
     3. 提出苏格拉底式问题 (Socratic Scaffolding)
     
     现在支持对话历史，确保生成的故事与之前的对话和故事内容保持一致。
+    重点：优先参考对话历史来理解画作中的对象，因为用户是根据对话内容来画的。
     """
     try:
         # 1. 解码图片并转换为 base64
@@ -87,19 +88,25 @@ async def analyze_drawing(request: DrawingRequest):
         img_bytes.seek(0)
         image_base64 = base64.b64encode(img_bytes.getvalue()).decode('utf-8')
         
-        # 2. 构建对话历史部分
+        # 2. 构建对话历史部分并提取关键信息
         conversation_history = ""
+        recent_topics = []
         if request.history and len(request.history) > 0:
-            conversation_history = "Previous Conversation with the child:\n"
-            for msg in request.history:
+            conversation_history = "CONVERSATION HISTORY (Very Important - Use this to understand the objects in the drawing):\n"
+            # 只保留最近的对话以获得更强的上下文
+            recent_msgs = request.history[-10:] if len(request.history) > 10 else request.history
+            for msg in recent_msgs:
                 if isinstance(msg, dict):
                     role = msg.get("role", "")
                     content = msg.get("content", "")
                     if role and content:
-                        conversation_history += f"{role}: {content}\n"
+                        conversation_history += f"{role.upper()}: {content}\n"
+                        # 提取可能的关键对象或主题
+                        if role.lower() == "user":
+                            recent_topics.append(content)
             conversation_history += "\n"
         
-        # 3. 构造 Prompt (提示词) - 保持英文
+        # 3. 构造 Prompt (提示词) - 保持英文，强调对话历史的重要性
         prompt_text = f"""
         You are an AI co-creation partner named "StorySketcher" for children aged 4-10.
         
@@ -107,12 +114,20 @@ async def analyze_drawing(request: DrawingRequest):
         "{request.story_context}"
         
         {conversation_history}
+        
+        CRITICAL INSTRUCTION:
+        The user drew this picture based on the conversation history above. Therefore:
+        1. FIRST, carefully read and understand the conversation history
+        2. THEN, look at the drawing and MATCH the objects/characters in the drawing to what was discussed in the conversation
+        3. Use the conversation context to correctly identify and interpret objects, characters, and themes in the drawing
+        4. If something in the drawing is ambiguous, prefer the interpretation that matches the conversation history
+        
         Task:
-        1. (Vision Agent) Look at this drawing, identify main objects, colors, and setting.
-        2. (Story Agent) Continue the story based on the new drawing. 
+        1. (Vision Agent) Look at this drawing. Identify the main objects, colors, and setting. INTERPRET THEM IN THE CONTEXT OF THE PREVIOUS CONVERSATION.
+        2. (Story Agent) Continue the story based on the new drawing and the conversation context. 
            - Ensure the new sentences flow naturally from the "Current Story Context".
-           - Remember and reference key details from the "Previous Conversation with the child" if relevant.
-           - Make the story cohesive, logical, and consistent with what we talked about before.
+           - Remember and reference key details from the conversation history
+           - Make the story cohesive, logical, and consistent with what was discussed in the conversation
            - Add 1-2 short, simple sentences in English.
         3. (Socratic Agent) Ask a heuristic question in English to guide the child to draw what happens NEXT.
         
