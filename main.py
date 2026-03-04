@@ -187,7 +187,7 @@ async def generate_movie(request: DrawingRequest):
             
         # Use story context as prompt if available, otherwise fallback
         base_prompt = "Create a vivid, child-friendly animation based on this drawing. Make the drawing items move lively. The background narative is" + f" '{story_text}'."
-        prompt_text = f"{base_prompt} Story context: {story_text}" if story_text else "Create a 30-second animation based on this drawing. Make it lively and fun, suitable for children. Focus on the main characters and add simple movements like waving, jumping, or smiling."
+        prompt_text = f"{base_prompt} Story context: {story_text}" if story_text else "Create a 10-second animation based on this drawing. Make it lively and fun, suitable for children. Focus on the main characters and add simple movements like waving, jumping, or smiling."
         
         # Ensure prompt is not too long (API limits)
         if len(prompt_text) > 500:
@@ -211,7 +211,7 @@ async def generate_movie(request: DrawingRequest):
             ],
             generate_audio=True,
             ratio="adaptive",
-            duration=30,
+            duration=10,
             watermark=False,
         )
         
