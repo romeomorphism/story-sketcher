@@ -97,18 +97,26 @@ async def analyze_drawing(request: DrawingRequest):
         conversation_history = ""
         recent_topics = []
         if request.history and len(request.history) > 0:
-            conversation_history = "CONVERSATION HISTORY (Very Important - Use this to understand the objects in the drawing):\n"
+            conversation_history = "\nCONVERSATION CONTEXT (Child & AI discussion - KEY TO UNDERSTANDING THE DRAWING):\n"
+            conversation_history += "=" * 60 + "\n"
             # 只保留最近的对话以获得更强的上下文
-            recent_msgs = request.history[-10:] if len(request.history) > 10 else request.history
+            recent_msgs = request.history[-12:] if len(request.history) > 12 else request.history
             for msg in recent_msgs:
                 if isinstance(msg, dict):
                     role = msg.get("role", "")
                     content = msg.get("content", "")
                     if role and content:
-                        conversation_history += f"{role.upper()}: {content}\n"
+                        # Clean up any HTML from content
+                        clean_content = content.replace('<br>', ' ').replace('<br/>', ' ')
+                        conversation_history += f"{role.upper()}: {clean_content}\n"
                         # 提取可能的关键对象或主题
                         if role.lower() == "user":
-                            recent_topics.append(content)
+                            recent_topics.append(clean_content)
+            conversation_history += "=" * 60 + "\n"
+            # 添加对象提示
+            if recent_topics:
+                objects_mentioned = " | ".join(recent_topics[-3:])  # Last 3 user messages likely contain object hints
+                conversation_history += f"KEY TOPICS LIKELY IN DRAWING: {objects_mentioned}\n"
             conversation_history += "\n"
         
         # 3. 构造 Prompt (提示词) - 保持英文，强调对话历史的重要性
@@ -120,26 +128,37 @@ async def analyze_drawing(request: DrawingRequest):
         
         {conversation_history}
         
-        CRITICAL INSTRUCTION:
-        The user drew this picture based on the conversation history above. Therefore:
+        CRITICAL INSTRUCTION FOR OBJECT RECOGNITION:
+        The child drew this picture based on the conversation history above. Your job is to:
         1. FIRST, carefully read and understand the conversation history
-        2. THEN, look at the drawing and MATCH the objects/characters in the drawing to what was discussed in the conversation
-        3. Use the conversation context to correctly identify and interpret objects, characters, and themes in the drawing
-        4. If something in the drawing is ambiguous, prefer the interpretation that matches the conversation history
+        2. IDENTIFY KEY OBJECTS/CHARACTERS mentioned in the conversation - these are likely what the child drew
+        3. MATCH the visual elements in the drawing to the conversation context
+        4. If the drawing shows shapes/colors, use conversation context to interpret what they represent
+        5. When ambiguous, ALWAYS prefer the interpretation that matches the conversation history
+        6. Reference specific things discussed in the conversation when explaining the drawing
+        
+        Example: If the conversation was about a "red dragon", and the drawing shows red shapes, interpret those shapes as the dragon mentioned in conversation.
         
         Task:
-        1. (Vision Agent) Look at this drawing. Identify the main objects, colors, and setting. INTERPRET THEM IN THE CONTEXT OF THE PREVIOUS CONVERSATION.
-        2. (Story Agent) Continue the story based on the new drawing and the conversation context. 
-           - Ensure the new sentences flow naturally from the "Current Story Context".
-           - Remember and reference key details from the conversation history
-           - Make the story cohesive, logical, and consistent with what was discussed in the conversation
-           - Add 1-2 short, simple sentences in English.
-        3. (Socratic Agent) Ask a heuristic question in English to guide the child to draw what happens NEXT.
+        1. (Vision Agent) Look at this drawing carefully. Identify the visual elements (shapes, colors, composition).
+           Based on the conversation history, interpret what objects/characters the child intended to draw.
+           Explain your interpretation by referencing the conversation.
         
-        Strictly return JSON format:
+        2. (Story Agent) Continue the story:
+           - Build on the current story context
+           - Incorporate the objects/characters the child drew (as identified through conversation context)
+           - Include specific details from the conversation history
+           - Use descriptive language to make the story engaging and vivid
+           - Make the new story part 2-3 short sentences in English (suitable for 4-10 year olds)
+           - Ensure smooth narrative flow from the current story
+        
+        3. (Socratic Agent) Ask an engaging question in English to guide the child's next creative step.
+           The question should encourage them to draw what happens next in the story.
+        
+        Return strictly in JSON format:
         {{
-            "story_update": "Story continuation text in English...",
-            "ai_question": "Question text in English..."
+            "story_update": "New story continuation (2-3 sentences)...",
+            "ai_question": "Engaging question to guide next drawing..."
         }}
         """
 
@@ -287,9 +306,9 @@ VIDEO INSTRUCTIONS:
 - Keep the narration clear, slow, and simple for children aged 4-10
 - The narration should match the animation and bring the story to life
 - Use a warm, friendly, enthusiastic tone for the narration
-- Duration: 10 seconds"""
+- Duration: 15 seconds"""
         
-        prompt_text = base_prompt if story_text else f"""Create a 10-second animation based on this drawing.
+        prompt_text = base_prompt if story_text else f"""Create a 15-second animation based on this drawing.
 Make it lively and fun, suitable for children. 
 Focus on the main characters and add simple movements like waving, jumping, or smiling.
     Add cheerful background sounds or music.
@@ -317,7 +336,7 @@ Focus on the main characters and add simple movements like waving, jumping, or s
             ],
             generate_audio=True,  # Generate audio with story narration
             ratio="adaptive",
-            duration=10,
+            duration=15,
             watermark=False,
         )
         

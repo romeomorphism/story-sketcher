@@ -368,6 +368,9 @@
         // Track story continuation: separate initial text from AI-generated parts
         const STORY_INIT_TEXT = "Once upon a time...";
         let storyParts = []; // Store only AI-generated story segments
+        
+        // Track conversation history to help AI understand drawing context
+        let conversationHistory = [];
 
         // Movie language selector (default: EN)
         document.querySelectorAll('.movie-lang-btn').forEach(btn => {
@@ -393,6 +396,12 @@
             div.innerHTML = `<div class="max-w-[85%] p-2 rounded-xl ${bubbleStyle} text-xs font-medium">${text}</div>`;
             chatHistory.appendChild(div);
             chatHistory.scrollTo({ top: chatHistory.scrollHeight, behavior: 'smooth' });
+            
+            // Track message in conversation history for drawing analysis
+            conversationHistory.push({
+                role: sender === 'user' ? 'user' : 'ai',
+                content: text.replace(/<[^>]*>/g, '') // Remove HTML tags
+            });
         }
 
         document.getElementById('done-btn').addEventListener('click', async () => {
@@ -410,7 +419,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         image_base64: imageBase64,
-                        story_context: currentStory 
+                        story_context: currentStory,
+                        history: conversationHistory // Pass full conversation history to help identify objects
                     })
                 });
 
@@ -456,7 +466,7 @@
                     body: JSON.stringify({ 
                         user_message: text, 
                         story_context: storyContextSource,
-                        history: [] 
+                        history: conversationHistory // Pass full conversation history to maintain context
                     })
                 });
                 const data = await response.json();
