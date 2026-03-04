@@ -56,6 +56,7 @@ app.add_middleware(
 class DrawingRequest(BaseModel):
     image_base64: str
     story_context: str = ""
+    history: list = []
 
 class ChatRequest(BaseModel):
     user_message: str
@@ -78,23 +79,39 @@ async def analyze_drawing(request: DrawingRequest):
     1. 识别画作内容 (Vision)
     2. 生成故事片段 (Story)
     3. 提出苏格拉底式问题 (Socratic Scaffolding)
+    
+    现在支持对话历史，确保生成的故事与之前的对话和故事内容保持一致。
     """
     try:
         # 1. 解码图片
         img = decode_image(request.image_base64)
         
-        # 2. 构造 Prompt (提示词) - 保持英文
+        # 2. 构建对话历史部分
+        conversation_history = ""
+        if request.history and len(request.history) > 0:
+            conversation_history = "Previous Conversation with the child:\n"
+            for msg in request.history:
+                if isinstance(msg, dict):
+                    role = msg.get("role", "")
+                    content = msg.get("content", "")
+                    if role and content:
+                        conversation_history += f"{role}: {content}\n"
+            conversation_history += "\n"
+        
+        # 3. 构造 Prompt (提示词) - 保持英文
         prompt = f"""
         You are an AI co-creation partner named "StorySketcher" for children aged 4-10.
         
         Current Story Context (The story so far):
         "{request.story_context}"
         
+        {conversation_history}
         Task:
         1. (Vision Agent) Look at this drawing, identify main objects, colors, and setting.
         2. (Story Agent) Continue the story based on the new drawing. 
            - Ensure the new sentences flow naturally from the "Current Story Context".
-           - Make the story cohesive and logical.
+           - Remember and reference key details from the "Previous Conversation with the child" if relevant.
+           - Make the story cohesive, logical, and consistent with what we talked about before.
            - Add 1-2 short, simple sentences in English.
         3. (Socratic Agent) Ask a heuristic question in English to guide the child to draw what happens NEXT.
         
@@ -105,13 +122,13 @@ async def analyze_drawing(request: DrawingRequest):
         }}
         """
 
-        # 3. 调用 Gemini
+        # 4. 调用 Gemini
         response = model.generate_content(
             [prompt, img],
             generation_config={"response_mime_type": "application/json"}
         )
         
-        # 4. 解析结果
+        # 5. 解析结果
         result = json.loads(response.text)
         
         return result
@@ -129,10 +146,23 @@ async def chat(request: ChatRequest):
     """
     Story Agent (纯对话模式):
     继续与孩子对话，引导故事发展。
+    支持对话历史，记住之前的对话内容。
     """
     try:
         # Prompt 改为全英文，确保 AI 回复英文
         story_context_str = request.story_context if request.story_context and len(request.story_context.strip()) > 0 else "None yet."
+        
+        # 构建对话历史部分
+        conversation_history = ""
+        if request.history and len(request.history) > 0:
+            conversation_history = "Previous Conversation:\n"
+            for msg in request.history:
+                if isinstance(msg, dict):
+                    role = msg.get("role", "")
+                    content = msg.get("content", "")
+                    if role and content:
+                        conversation_history += f"{role}: {content}\n"
+            conversation_history += "\n"
         
         prompt = f"""
         You are StoryBuddy, a friendly and enthusiastic AI storytelling assistant.
@@ -141,13 +171,14 @@ async def chat(request: ChatRequest):
         Current Story Content:
         "{story_context_str}"
         
-        User's input: "{request.user_message}"
+        {conversation_history}User's current input: "{request.user_message}"
         
         Instructions:
         1. Reply in short, simple, and encouraging English.
-        2. Your reply MUST relate to the "Current Story Content". For example, if the story is about a cat, talk about the cat.
+        2. Your reply MUST relate to the "Current Story Content" and remember what we discussed before. Keep the conversation flowing naturally from our previous chat.
         3. If the user suggests a new idea, encourage them to draw it on the canvas to add it to the story.
         4. Keep the tone magical and fun.
+        5. Be consistent with anything you said or promised in the previous conversation.
         """
         
         response = model.generate_content(prompt)
