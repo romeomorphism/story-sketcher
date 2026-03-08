@@ -283,7 +283,8 @@ async def generate_movie(request: DrawingRequest):
         language_map = {
             "en": "English",
             "zh": "Chinese",
-            "de": "German"
+            "de": "German",
+            "fr": "French"
         }
         narration_language = language_map.get(selected_language, "English")
             
