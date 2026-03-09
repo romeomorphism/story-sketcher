@@ -10,7 +10,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
     
     <style>
-        body { font-family: 'Nunito', sans-serif; overflow: hidden; }
+        html, body { height: 100%; }
+        body {
+            font-family: 'Nunito', sans-serif;
+            overflow: hidden;
+            min-height: 100dvh;
+        }
         h1, h2, h3, button { font-family: 'Fredoka', cursive; }
         
         /* Pastel Checkered Background (Picnic Table) */
@@ -117,6 +122,102 @@
             border: 2px solid #e2e8f0;
             border-radius: 50px;
             box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        /* iPad landscape + general tablet tuning */
+        @media (min-width: 768px) and (max-width: 1180px) {
+            body {
+                padding: 12px;
+                gap: 12px;
+            }
+
+            .left-stack {
+                width: 38vw;
+                min-width: 320px;
+                max-width: 430px;
+                padding-left: 0;
+                gap: 1rem;
+            }
+
+            .story-journal {
+                height: 46%;
+                transform: rotate(-1.5deg);
+            }
+
+            .chat-console {
+                height: 52%;
+                transform: rotate(1deg) translateX(0);
+            }
+
+            .drawing-easel {
+                margin: 0;
+                border-width: 8px;
+                min-width: 0;
+            }
+
+            .drawing-easel .wood-palette {
+                gap: 0.9rem;
+                padding: 0.65rem 1rem;
+            }
+
+            #color-palette {
+                display: grid;
+                grid-template-columns: repeat(5, minmax(0, 1fr));
+                gap: 0.45rem;
+            }
+        }
+
+        /* iPad portrait: stack panels and keep tools accessible */
+        @media (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
+            body {
+                flex-direction: column;
+                overflow-y: auto;
+                overflow-x: hidden;
+                height: auto;
+                min-height: 100dvh;
+                padding-bottom: calc(12px + env(safe-area-inset-bottom));
+            }
+
+            .left-stack {
+                width: 100%;
+                min-width: 0;
+                max-width: 100%;
+                height: 34vh;
+                flex-direction: row;
+                align-items: stretch;
+                gap: 0.8rem;
+            }
+
+            .story-journal,
+            .chat-console {
+                flex: 1;
+                height: 100%;
+                transform: none;
+            }
+
+            .drawing-easel {
+                margin: 0;
+                height: 60vh;
+                min-height: 460px;
+            }
+
+            .drawing-easel .wood-palette {
+                width: calc(100% - 28px);
+                max-width: 100%;
+                bottom: 10px;
+                gap: 0.6rem;
+                padding: 0.6rem 0.9rem;
+                border-radius: 26px;
+                flex-wrap: wrap;
+            }
+
+            .drawing-easel #movie-lang-selector {
+                font-size: 10px;
+            }
+
+            .tape-bc {
+                display: none;
+            }
         }
     </style>
 </head>
