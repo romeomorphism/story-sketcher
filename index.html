@@ -124,6 +124,50 @@
             box-shadow: 0 10px 20px rgba(0,0,0,0.1);
         }
 
+        .language-gate {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(15, 23, 42, 0.45);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+
+        .language-card {
+            width: min(92vw, 520px);
+            background: #ffffff;
+            border-radius: 20px;
+            border: 2px solid #e2e8f0;
+            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
+            padding: 24px;
+        }
+
+        .lang-option {
+            border: 2px solid #cbd5e1;
+            border-radius: 14px;
+            padding: 10px 14px;
+            font-size: 14px;
+            font-weight: 700;
+            color: #334155;
+            background: #f8fafc;
+            transition: all 0.2s ease;
+        }
+
+        .lang-option:hover {
+            transform: translateY(-1px);
+            border-color: #6366f1;
+            background: #eef2ff;
+        }
+
+        .lang-option.active {
+            border-color: #6366f1;
+            background: #6366f1;
+            color: #ffffff;
+        }
+
         /* iPad landscape + general tablet tuning */
         @media (min-width: 768px) and (max-width: 1180px) {
             body {
@@ -223,6 +267,22 @@
 </head>
 <body class="picnic-bg h-screen w-screen overflow-hidden flex p-4 gap-2">
 
+    <div id="language-gate" class="language-gate">
+        <div class="language-card">
+            <h2 class="text-2xl font-bold text-slate-700">Choose Language</h2>
+            <p class="mt-2 text-sm text-slate-500">Story, chat, and movie narration will all use this language.</p>
+            <div id="language-options" class="mt-4 grid grid-cols-2 gap-3">
+                <button class="lang-option active" data-lang="en">English</button>
+                <button class="lang-option" data-lang="zh">中文</button>
+                <button class="lang-option" data-lang="de">Deutsch</button>
+                <button class="lang-option" data-lang="fr">Français</button>
+            </div>
+            <button id="confirm-language-btn" class="mt-5 w-full bg-indigo-500 text-white rounded-xl py-2 font-bold hover:bg-indigo-600 transition-colors">
+                Start
+            </button>
+        </div>
+    </div>
+
     <!-- Left Side: Stacked Collage -->
     <div class="left-stack">
         
@@ -234,7 +294,7 @@
             </div>
             
             <div class="mt-6 px-5 py-2 border-b-2 border-dashed border-amber-200 flex justify-between items-center decoration-wavy">
-                <span class="font-bold text-amber-600 font-sans tracking-wider">MY STORY DIARY</span>
+                <span id="story-diary-title" class="font-bold text-amber-600 font-sans tracking-wider">MY STORY DIARY</span>
                 <i class="fa-solid fa-star text-amber-400"></i>
             </div>
             
@@ -258,7 +318,7 @@
                     <div class="bg-white p-1 rounded-lg shadow-sm">
                         <i class="fa-solid fa-gamepad text-purple-500"></i>
                     </div>
-                    <span class="font-bold text-purple-600 text-sm">CHAT-BOY</span>
+                    <span id="chat-title" class="font-bold text-purple-600 text-sm">CHAT-BOY</span>
                 </div>
                 <div class="text-[10px] text-purple-400 font-mono">BAT 100%</div>
             </div>
@@ -266,7 +326,7 @@
             <div id="chat-history" class="flex-grow overflow-y-auto p-4 space-y-3 bg-white/50">
                 <div class="flex justify-start fade-in">
                     <div class="bg-white p-2 rounded-xl rounded-tl-none border border-purple-100 text-xs text-slate-600 shadow-sm">
-                        Hello! Let's create together!
+                        <span id="chat-welcome">Hello! Let's create together!</span>
                     </div>
                 </div>
             </div>
@@ -301,7 +361,7 @@
 
             <div id="ai-loading" class="hidden absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center z-20">
                 <i class="fa-solid fa-palette text-5xl text-pink-400 animate-bounce"></i>
-                <p class="mt-4 font-bold text-pink-400">Mixing Colors...</p>
+                <p id="loading-text" class="mt-4 font-bold text-pink-400">Mixing Colors...</p>
             </div>
         </div>
 
@@ -338,20 +398,17 @@
              </div>
 
              <button id="done-btn" class="ml-4 bg-gradient-to-r from-pink-400 to-rose-400 text-white px-5 py-2 rounded-full font-bold shadow-lg hover:-translate-y-1 transition-transform text-sm">
-                 DONE <i class="fa-solid fa-check ml-1"></i>
+                 <span id="done-btn-text">DONE</span> <i class="fa-solid fa-check ml-1"></i>
              </button>
         </div>
         
-        <!-- Movie Language + Button (Top Right Absolute) -->
+        <!-- Current Language + Movie Button (Top Right Absolute) -->
         <div class="absolute top-4 right-4 z-30 flex items-center gap-2">
             <div id="movie-lang-selector" class="bg-white/85 backdrop-blur rounded-lg border border-indigo-100 shadow-sm px-1 py-1 flex items-center gap-1 text-[11px] font-bold">
-                <button class="movie-lang-btn px-2 py-1 rounded bg-indigo-500 text-white" data-lang="en">EN</button>
-                <button class="movie-lang-btn px-2 py-1 rounded text-indigo-500 hover:bg-indigo-50" data-lang="zh">中</button>
-                <button class="movie-lang-btn px-2 py-1 rounded text-indigo-500 hover:bg-indigo-50" data-lang="de">DE</button>
-                <button class="movie-lang-btn px-2 py-1 rounded text-indigo-500 hover:bg-indigo-50" data-lang="fr">FR</button>
+                <span id="current-lang-label" class="px-2 py-1 rounded bg-indigo-500 text-white">EN</span>
             </div>
             <button id="movie-btn" class="bg-white/80 backdrop-blur text-indigo-500 px-3 py-1 rounded-lg border border-indigo-100 shadow-sm text-xs font-bold hover:bg-white transition-all">
-                <i class="fa-solid fa-film"></i> Movie
+                <i class="fa-solid fa-film"></i> <span id="movie-btn-text">Movie</span>
             </button>
         </div>
 
@@ -465,27 +522,113 @@
         const chatHistory = document.getElementById('chat-history');
         const storyContent = document.getElementById('story-content');
         const loadingOverlay = document.getElementById('ai-loading');
+        let selectedAppLanguage = 'en';
         let selectedMovieLanguage = 'en';
-        
+
+        const languageMeta = {
+            en: {
+                code: 'EN',
+                diaryTitle: 'MY STORY DIARY',
+                chatTitle: 'CHAT-BOY',
+                welcome: "Hello! Let's create together!",
+                inputPlaceholder: 'Message...',
+                storyInit: 'Once upon a time...',
+                doneText: 'DONE',
+                movieText: 'Movie',
+                loadingText: 'Mixing Colors...',
+                drawDoneMsg: 'I finished my drawing!'
+            },
+            zh: {
+                code: '中',
+                diaryTitle: '我的故事日记',
+                chatTitle: '聊天伙伴',
+                welcome: '你好！我们一起来创作吧！',
+                inputPlaceholder: '输入消息...',
+                storyInit: '从前有一个故事...',
+                doneText: '完成',
+                movieText: '电影',
+                loadingText: '正在调色中...',
+                drawDoneMsg: '我完成画画啦！'
+            },
+            de: {
+                code: 'DE',
+                diaryTitle: 'MEIN GESCHICHTENTAGEBUCH',
+                chatTitle: 'CHAT-FREUND',
+                welcome: 'Hallo! Lass uns zusammen etwas erschaffen!',
+                inputPlaceholder: 'Nachricht...',
+                storyInit: 'Es war einmal...',
+                doneText: 'FERTIG',
+                movieText: 'Film',
+                loadingText: 'Farben werden gemischt...',
+                drawDoneMsg: 'Ich bin mit meiner Zeichnung fertig!'
+            },
+            fr: {
+                code: 'FR',
+                diaryTitle: 'MON JOURNAL D\'HISTOIRE',
+                chatTitle: 'CHAT-AMI',
+                welcome: 'Bonjour ! Creons ensemble !',
+                inputPlaceholder: 'Message...',
+                storyInit: 'Il etait une fois...',
+                doneText: 'TERMINE',
+                movieText: 'Film',
+                loadingText: 'Melange des couleurs...',
+                drawDoneMsg: 'J\'ai fini mon dessin !'
+            }
+        };
+
         // Track story continuation: separate initial text from AI-generated parts
-        const STORY_INIT_TEXT = "Once upon a time...";
+        let STORY_INIT_TEXT = languageMeta.en.storyInit;
         let storyParts = []; // Store only AI-generated story segments
         
         // Track conversation history to help AI understand drawing context
         let conversationHistory = [];
 
-        // Movie language selector (default: EN)
-        document.querySelectorAll('.movie-lang-btn').forEach(btn => {
+        function applyLanguage(lang) {
+            const normalized = languageMeta[lang] ? lang : 'en';
+            const t = languageMeta[normalized];
+
+            selectedAppLanguage = normalized;
+            selectedMovieLanguage = normalized;
+            STORY_INIT_TEXT = t.storyInit;
+
+            document.getElementById('current-lang-label').innerText = t.code;
+            document.getElementById('story-diary-title').innerText = t.diaryTitle;
+            document.getElementById('chat-title').innerText = t.chatTitle;
+            document.getElementById('chat-input').placeholder = t.inputPlaceholder;
+            document.getElementById('done-btn-text').innerText = t.doneText;
+            document.getElementById('movie-btn-text').innerText = t.movieText;
+            document.getElementById('loading-text').innerText = t.loadingText;
+
+            // Reset initial texts only when conversation/story is still at initial state
+            const storyOnlyInit = storyParts.length === 0;
+            if (storyOnlyInit) {
+                storyContent.innerHTML = `<p>${t.storyInit}</p>`;
+            }
+
+            if (conversationHistory.length === 0) {
+                chatHistory.innerHTML = `
+                    <div class="flex justify-start fade-in">
+                        <div class="bg-white p-2 rounded-xl rounded-tl-none border border-purple-100 text-xs text-slate-600 shadow-sm">
+                            ${t.welcome}
+                        </div>
+                    </div>`;
+            }
+        }
+
+        document.querySelectorAll('.lang-option').forEach(btn => {
             btn.addEventListener('click', () => {
-                selectedMovieLanguage = btn.getAttribute('data-lang') || 'en';
-                document.querySelectorAll('.movie-lang-btn').forEach(b => {
-                    b.classList.remove('bg-indigo-500', 'text-white');
-                    b.classList.add('text-indigo-500', 'hover:bg-indigo-50');
-                });
-                btn.classList.add('bg-indigo-500', 'text-white');
-                btn.classList.remove('text-indigo-500', 'hover:bg-indigo-50');
+                const lang = btn.getAttribute('data-lang') || 'en';
+                document.querySelectorAll('.lang-option').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                applyLanguage(lang);
             });
         });
+
+        document.getElementById('confirm-language-btn').addEventListener('click', () => {
+            document.getElementById('language-gate').style.display = 'none';
+        });
+
+        applyLanguage('en');
 
         function addMessage(sender, text) {
             const div = document.createElement('div');
@@ -522,7 +665,9 @@
                     body: JSON.stringify({ 
                         image_base64: imageBase64,
                         story_context: currentStory,
-                        history: conversationHistory // Pass full conversation history to help identify objects
+                        history: conversationHistory, // Pass full conversation history to help identify objects
+                        language: selectedAppLanguage,
+                        movie_language: selectedMovieLanguage
                     })
                 });
 
@@ -538,7 +683,7 @@
                 storyContent.appendChild(p);
                 storyContent.scrollTo({ top: storyContent.scrollHeight, behavior: 'smooth' });
 
-                addMessage('user', "I finished my drawing! 🎨");
+                addMessage('user', `${languageMeta[selectedAppLanguage].drawDoneMsg} 🎨`);
                 setTimeout(() => addMessage('ai', data.ai_question), 600);
 
             } catch (err) {
@@ -568,14 +713,15 @@
                     body: JSON.stringify({ 
                         user_message: text, 
                         story_context: storyContextSource,
-                        history: conversationHistory // Pass full conversation history to maintain context
+                        history: conversationHistory, // Pass full conversation history to maintain context
+                        language: selectedAppLanguage
                     })
                 });
                 const data = await response.json();
                 addMessage('ai', data.reply);
             } catch (err) {
                 console.error(err);
-                addMessage('ai', "Signal lost! 📡");
+                addMessage('ai', "Signal lost! Please try again.");
             }
         }
         document.getElementById('send-btn').addEventListener('click', handleSend);
@@ -599,7 +745,7 @@
                 const imageBase64 = canvas.toDataURL('image/png');
                 
                 // 2. Start Generation
-                addMessage('ai', "Ooh! Making a movie magic! 🎬 Hang tight...");
+                addMessage('ai', "Ooh! Making movie magic! Hang tight...");
                 
                 console.log("Generating movie with complete story:", completeStory); // Debug log
                 
@@ -609,6 +755,7 @@
                     body: JSON.stringify({ 
                         image_base64: imageBase64,
                         story_context: completeStory,
+                        language: selectedAppLanguage,
                         movie_language: selectedMovieLanguage
                     })
                 });

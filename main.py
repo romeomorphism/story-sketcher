@@ -52,12 +52,14 @@ class DrawingRequest(BaseModel):
     image_base64: str
     story_context: str = ""
     history: list = []
+    language: str = "en"
     movie_language: str = "en"
 
 class ChatRequest(BaseModel):
     user_message: str
     story_context: str = ""
     history: list = []
+    language: str = "en"
 
 class TextToSpeechRequest(BaseModel):
     text: str
@@ -69,6 +71,18 @@ def decode_image(base64_string):
         base64_string = base64_string.split("base64,")[1]
     image_data = base64.b64decode(base64_string)
     return Image.open(io.BytesIO(image_data))
+
+
+def get_language_config(language_code: str):
+    normalized = (language_code or "en").lower()
+    language_map = {
+        "en": "English",
+        "zh": "Chinese",
+        "de": "German",
+        "fr": "French"
+    }
+    selected = language_map.get(normalized, "English")
+    return normalized, selected
 
 # --- 核心接口 ---
 
@@ -84,6 +98,8 @@ async def analyze_drawing(request: DrawingRequest):
     重点：优先参考对话历史来理解画作中的对象，因为用户是根据对话内容来画的。
     """
     try:
+        _, target_language = get_language_config(request.language)
+
         # 1. 解码图片并转换为 base64
         img = decode_image(request.image_base64)
         
@@ -119,7 +135,7 @@ async def analyze_drawing(request: DrawingRequest):
                 conversation_history += f"KEY TOPICS LIKELY IN DRAWING: {objects_mentioned}\n"
             conversation_history += "\n"
         
-        # 3. 构造 Prompt (提示词) - 保持英文，强调对话历史的重要性
+        # 3. 构造 Prompt (提示词) - 根据所选语言输出故事和问题
         prompt_text = f"""
         You are an AI co-creation partner named "StorySketcher" for children aged 4-10.
         
@@ -149,10 +165,10 @@ async def analyze_drawing(request: DrawingRequest):
            - Incorporate the objects/characters the child drew (as identified through conversation context)
            - Include specific details from the conversation history
            - Use descriptive language to make the story engaging and vivid
-           - Make the new story part 2-3 short sentences in English (suitable for 4-10 year olds)
+              - Make the new story part 2-3 short sentences in {target_language} (suitable for 4-10 year olds)
            - Ensure smooth narrative flow from the current story
         
-        3. (Socratic Agent) Ask an engaging question in English to guide the child's next creative step.
+          3. (Socratic Agent) Ask an engaging question in {target_language} to guide the child's next creative step.
            The question should encourage them to draw what happens next in the story.
         
         Return strictly in JSON format:
@@ -203,13 +219,15 @@ async def chat(request: ChatRequest):
     支持对话历史，记住之前的对话内容。
     """
     try:
+        _, target_language = get_language_config(request.language)
+
         # 构建消息列表，包含对话历史
         messages = []
         
         # 添加系统消息
-        system_message = """You are StoryBuddy, a friendly and enthusiastic AI storytelling assistant.
+        system_message = f"""You are StoryBuddy, a friendly and enthusiastic AI storytelling assistant.
 The user is a young child (4-10 years old).
-Reply in short, simple, and encouraging English. Keep the tone magical and fun."""
+    Reply in short, simple, and encouraging {target_language}. Keep the tone magical and fun."""
         
         messages.append({"role": "system", "content": system_message})
         
@@ -278,15 +296,10 @@ async def generate_movie(request: DrawingRequest):
             # If it's just the placeholder, ignore it for prompt purposes
             story_text = ""
 
-        # Language selection (default English)
-        selected_language = (request.movie_language or "en").lower()
-        language_map = {
-            "en": "English",
-            "zh": "Chinese",
-            "de": "German",
-            "fr": "French"
-        }
-        narration_language = language_map.get(selected_language, "English")
+        # Language selection: movie language follows app language by default
+        fallback_lang = request.language if hasattr(request, "language") else "en"
+        selected_language = (request.movie_language or fallback_lang or "en").lower()
+        _, narration_language = get_language_config(selected_language)
             
         # Create enhanced prompt that includes story narration requirement
         # Ensure the video includes narration in selected language
