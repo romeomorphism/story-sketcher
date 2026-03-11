@@ -180,7 +180,7 @@ async def analyze_drawing(request: DrawingRequest):
 
         # 4. 调用 Doubao (使用 Ark 客户端)
         response = ark_client.chat.completions.create(
-            model="doubao-seed-1-6-251015",
+            model="doubao-seed-2-0-lite-260215",
             messages=[
                 {
                     "role": "user",
