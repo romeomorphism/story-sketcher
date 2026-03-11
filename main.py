@@ -231,13 +231,15 @@ The user is a young child (4-10 years old).
         
         messages.append({"role": "system", "content": system_message})
         
-        # 添加之前的对话历史
+        # 添加之前的对话历史（将前端的 "ai" role 映射为 API 标准的 "assistant"）
         if request.history and len(request.history) > 0:
             for msg in request.history:
                 if isinstance(msg, dict):
                     role = msg.get("role", "")
                     content = msg.get("content", "")
-                    if role and content:
+                    if role == "ai":
+                        role = "assistant"
+                    if role in ("user", "assistant") and content:
                         messages.append({"role": role, "content": content})
         
         # 添加当前用户消息和故事上下文
@@ -263,8 +265,7 @@ Instructions:
         return {"reply": response.choices[0].message.content}
 
     except Exception as e:
-        print(f"Error: {e}")
-        # 错误信息改为英文
+        print(f"Chat error: {type(e).__name__}: {e}")
         return {"reply": "Sorry, my magic brain fuzzy for a second. Can you say that again?"}
 
 @app.post("/api/generate-movie")
