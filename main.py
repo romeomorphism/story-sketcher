@@ -78,6 +78,8 @@ def get_language_config(language_code: str):
     language_map = {
         "en": "English",
         "zh": "Chinese",
+        "zh-tw": "Traditional Chinese",
+        "zh-hant": "Traditional Chinese",
         "de": "German",
         "fr": "French"
     }

@@ -274,6 +274,7 @@
             <div id="language-options" class="mt-4 grid grid-cols-2 gap-3">
                 <button class="lang-option active" data-lang="en">English</button>
                 <button class="lang-option" data-lang="zh">中文</button>
+                <button class="lang-option" data-lang="zh-TW">繁體中文</button>
                 <button class="lang-option" data-lang="de">Deutsch</button>
                 <button class="lang-option" data-lang="fr">Français</button>
             </div>
@@ -548,6 +549,18 @@
                 loadingText: '正在调色中...',
                 drawDoneMsg: '我完成画画啦！'
             },
+            'zh-TW': {
+                code: '繁',
+                diaryTitle: '我的故事日記',
+                chatTitle: '聊天夥伴',
+                welcome: '你好！我們一起來創作吧！',
+                inputPlaceholder: '輸入訊息...',
+                storyInit: '從前有一個故事...',
+                doneText: '完成',
+                movieText: '電影',
+                loadingText: '正在調色中...',
+                drawDoneMsg: '我完成畫畫啦！'
+            },
             de: {
                 code: 'DE',
                 diaryTitle: 'MEIN GESCHICHTENTAGEBUCH',
@@ -588,6 +601,7 @@
             selectedAppLanguage = normalized;
             selectedMovieLanguage = normalized;
             STORY_INIT_TEXT = t.storyInit;
+            document.documentElement.lang = normalized === 'zh-TW' ? 'zh-Hant' : (normalized === 'zh' ? 'zh-Hans' : normalized);
 
             document.getElementById('current-lang-label').innerText = t.code;
             document.getElementById('story-diary-title').innerText = t.diaryTitle;
