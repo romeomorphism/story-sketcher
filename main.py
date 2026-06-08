@@ -260,7 +260,8 @@ Instructions:
         
         # 调用 Doubao (使用 Ark 客户端)
         response = ark_client.chat.completions.create(
-            model="doubao-seed-1-6-251015",
+            # model="doubao-seed-1-6-251015",
+            model="doubao-seed-2-0-pro-260215",
             messages=messages
         )
         
