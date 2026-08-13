@@ -339,7 +339,7 @@ Focus on the main characters and add simple movements like waving, jumping, or s
         print(f"Generating movie in language [{selected_language}] with narration prompt: {prompt_text}")
 
         create_movie_response = ark_client.content_generation.tasks.create(
-            model="doubao-seedance-1-5-pro-251215",
+            model="doubao-seedance-2-0-260128",
             content=[
                 {
                     "type": "text",
@@ -498,4 +498,4 @@ async def text_to_speech(request: TextToSpeechRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=8000)
