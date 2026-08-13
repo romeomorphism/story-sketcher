@@ -339,7 +339,7 @@ Focus on the main characters and add simple movements like waving, jumping, or s
         print(f"Generating movie in language [{selected_language}] with narration prompt: {prompt_text}")
 
         create_movie_response = ark_client.content_generation.tasks.create(
-            model="doubao-seedance-2-0-260128",
+            model="doubao-seedance-2-0-fast-260128",
             content=[
                 {
                     "type": "text",
