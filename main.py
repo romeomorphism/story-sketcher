@@ -15,6 +15,10 @@ from volcenginesdkarkruntime import Ark
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 ARK_API_KEY = os.environ.get("ARK_API_KEY")
 
+# Model configuration
+DRAWING_MODEL = "doubao-seed-2-1-turbo-260628"
+CHAT_MODEL = "doubao-seed-2-1-turbo-260628"
+
 # Is running on Vercel?
 IS_VERCEL = os.environ.get("VERCEL") == "1"
 
@@ -182,7 +186,7 @@ async def analyze_drawing(request: DrawingRequest):
 
         # 4. 调用 Doubao (使用 Ark 客户端)
         response = ark_client.chat.completions.create(
-            model="doubao-seed-2-0-lite-260215",
+            model=DRAWING_MODEL,
             messages=[
                 {
                     "role": "user",
@@ -261,7 +265,7 @@ Instructions:
         # 调用 Doubao (使用 Ark 客户端)
         response = ark_client.chat.completions.create(
             # model="doubao-seed-1-6-251015",
-            model="doubao-seed-2-0-pro-260215",
+            model=CHAT_MODEL,
             messages=messages
         )
         
