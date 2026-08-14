@@ -311,45 +311,39 @@ async def generate_movie(request: DrawingRequest):
             
         # Create enhanced prompt that includes story narration requirement
         # Ensure the video includes narration in selected language
-        base_prompt = f"""Create a vivid, child-friendly 10-second animation that stays faithful to the child's drawing.
+        base_prompt = f"""Create a vivid, child-friendly animation based on this drawing:
 
-STORY TO NARRATE:
+STORY NARRATION (IMPORTANT):
+    Add clear {narration_language} narration/voiceover that tells the following story:
 "{story_text}"
 
-NARRATION CONTENT (VERY IMPORTANT):
-- Tell the story in {narration_language} and describe the main characters, objects, and actions visible in the drawing.
-- Cover the story as completely as possible, including its beginning, main action, and ending.
-- If the full story cannot fit naturally within 10 seconds, faithfully condense it into a short but complete narration. Never rush, cut off a sentence, or omit the main event just to fit more words.
-- Do not invent unrelated details that are not supported by the drawing or story.
-- If the story text is in another language, translate it naturally into {narration_language}.
-- Keep the wording simple and child-friendly for children aged 4-10.
-
-VOICE DELIVERY (VERY IMPORTANT):
-- Pronounce every word clearly with crisp articulation.
-- Speak at a calm, moderate-to-slow pace. Do not speak quickly.
-- Use natural pauses between phrases so every sentence is easy to understand.
-- Use a warm, friendly, enthusiastic storyteller voice.
+    LANGUAGE RULES:
+    - The narration language MUST be {narration_language}
+    - If the story text is in another language, translate it into {narration_language} for narration
+    - Keep wording simple and child-friendly in {narration_language}
 
 VIDEO INSTRUCTIONS:
-- Animate the important elements from the drawing while preserving their original appearance.
-- Make the characters and objects move naturally and expressively.
-- Synchronize the animation closely with the narration.
-- Ensure the narration ends with a complete sentence before the video ends.
-- Duration: 10 seconds."""
+- Make the drawing items move lively and expressively
+- Synchronize the animation with the story narration
+- Keep the narration clear, slow, and simple for children aged 4-10
+- The narration should match the animation and bring the story to life
+- Use a warm, friendly, enthusiastic tone for the narration
+- Duration: 10 seconds"""
 
-        prompt_text = base_prompt if story_text else f"""Create a vivid, child-friendly 10-second animation based faithfully on this drawing.
-- Clearly describe the main characters, objects, and actions visible in the drawing in {narration_language}.
-- Use a short, complete narration with a beginning and ending; do not invent unrelated details.
-- Pronounce every word clearly and speak at a calm, moderate-to-slow pace. Never rush.
-- Use natural pauses and finish the final sentence before the video ends.
-- Keep the language simple for children aged 4-10 and use a warm, friendly storyteller voice.
-- Animate the important elements naturally while preserving their original appearance.
-- Synchronize the animation with the narration and add gentle, cheerful background sound."""
+        prompt_text = base_prompt if story_text else f"""Create a 10-second animation based on this drawing.
+Make it lively and fun, suitable for children.
+Focus on the main characters and add simple movements like waving, jumping, or smiling.
+    Add cheerful background sounds or music.
+    Narration/voice language MUST be {narration_language}."""
+
+        # Ensure prompt is not too long (API limits)
+        if len(prompt_text) > 800:
+            prompt_text = prompt_text[:800]
         
         print(f"Generating movie in language [{selected_language}] with narration prompt: {prompt_text}")
 
         create_movie_response = ark_client.content_generation.tasks.create(
-            model="doubao-seedance-2-0-fast-260128",
+            model="doubao-seedance-1-5-pro-251215",
             content=[
                 {
                     "type": "text",
