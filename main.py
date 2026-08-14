@@ -2,17 +2,15 @@ import os
 import base64
 import io
 import json
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import google.generativeai as genai
 from PIL import Image
-from volcenginesdkarkruntime import Ark 
+from volcenginesdkarkruntime import Ark
 
 # --- 配置部分 ---
 
-# 1. API Keys (Prioritize environment variables for Vercel/Production)
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
+# 1. API Key (Prioritize environment variables for Vercel/Production)
 ARK_API_KEY = os.environ.get("ARK_API_KEY")
 
 # Model configuration
@@ -32,11 +30,7 @@ if not IS_VERCEL:
          os.environ["HTTP_PROXY"] = f"http://127.0.0.1:{proxy_port}"
          os.environ["HTTPS_PROXY"] = f"http://127.0.0.1:{proxy_port}"
 
-# 3. Configure Gemini (not needed for Doubao)
-if not GOOGLE_API_KEY:
-    print("Warning: GOOGLE_API_KEY is not required for Doubao")
-
-app = FastAPI(title="StorySketcher Gemini Backend")
+app = FastAPI(title="StorySketcher Backend")
 
 # 5. 配置 Ark (动画生成引擎)
 ark_client = Ark(base_url="https://ark.cn-beijing.volces.com/api/v3",
@@ -109,9 +103,11 @@ async def analyze_drawing(request: DrawingRequest):
         # 1. 解码图片并转换为 base64
         img = decode_image(request.image_base64)
 
-        # 将图片保存为 PNG 格式并转为 base64
+        # Resize and compress the drawing before sending it across regions to Ark.
+        img = img.convert("RGB")
+        img.thumbnail((1280, 1280))
         img_bytes = io.BytesIO()
-        img.save(img_bytes, format='PNG')
+        img.save(img_bytes, format="JPEG", quality=85, optimize=True)
         img_bytes.seek(0)
         image_base64 = base64.b64encode(img_bytes.getvalue()).decode('utf-8')
         
@@ -195,12 +191,14 @@ async def analyze_drawing(request: DrawingRequest):
                         {
                             "type": "image_url",
                             "image_url": {
-                                "url": f"data:image/png;base64,{image_base64}"
+                                "url": f"data:image/jpeg;base64,{image_base64}"
                             }
                         }
                     ]
                 }
-            ]
+            ],
+            thinking={"type": "disabled"},
+            max_tokens=300,
         )
         
         # 5. 解析结果
@@ -239,7 +237,7 @@ The user is a young child (4-10 years old).
         
         # 添加之前的对话历史（将前端的 "ai" role 映射为 API 标准的 "assistant"）
         if request.history and len(request.history) > 0:
-            for msg in request.history:
+            for msg in request.history[-10:]:
                 if isinstance(msg, dict):
                     role = msg.get("role", "")
                     content = msg.get("content", "")
@@ -266,7 +264,9 @@ Instructions:
         response = ark_client.chat.completions.create(
             # model="doubao-seed-1-6-251015",
             model=CHAT_MODEL,
-            messages=messages
+            messages=messages,
+            thinking={"type": "disabled"},
+            max_tokens=180,
         )
         
         return {"reply": response.choices[0].message.content}

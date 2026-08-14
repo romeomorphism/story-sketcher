@@ -515,6 +515,20 @@
              ctx.clearRect(0, 0, canvas.width, canvas.height);
         });
 
+        function getOptimizedDrawingDataUrl(maxDimension = 1280, quality = 0.85) {
+            const scale = Math.min(1, maxDimension / Math.max(canvas.width, canvas.height));
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = Math.max(1, Math.round(canvas.width * scale));
+            exportCanvas.height = Math.max(1, Math.round(canvas.height * scale));
+
+            const exportContext = exportCanvas.getContext('2d');
+            exportContext.fillStyle = '#FFFFFF';
+            exportContext.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+            exportContext.drawImage(canvas, 0, 0, exportCanvas.width, exportCanvas.height);
+
+            return exportCanvas.toDataURL('image/jpeg', quality);
+        }
+
         // --- 2. API Interaction ---
         // Dynamically determine API URL
         const API_URL = "/api";
@@ -664,7 +678,7 @@
         document.getElementById('done-btn').addEventListener('click', async () => {
              loadingOverlay.classList.remove('hidden');
             try {
-                const imageBase64 = canvas.toDataURL('image/png');
+                const imageBase64 = getOptimizedDrawingDataUrl();
                 // Build complete story context: initial text + all previously generated parts
                 let currentStory = STORY_INIT_TEXT;
                 if (storyParts.length > 0) {
@@ -677,7 +691,7 @@
                     body: JSON.stringify({ 
                         image_base64: imageBase64,
                         story_context: currentStory,
-                        history: conversationHistory, // Pass full conversation history to help identify objects
+                        history: conversationHistory.slice(-12),
                         language: selectedAppLanguage,
                         movie_language: selectedMovieLanguage
                     })
@@ -725,7 +739,8 @@
                     body: JSON.stringify({ 
                         user_message: text, 
                         story_context: storyContextSource,
-                        history: conversationHistory, // Pass full conversation history to maintain context
+                        // addMessage() already added the current input, so send only prior turns.
+                        history: conversationHistory.slice(0, -1).slice(-10),
                         language: selectedAppLanguage
                     })
                 });
