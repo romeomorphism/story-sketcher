@@ -608,6 +608,97 @@
         // Track conversation history to help AI understand drawing context
         let conversationHistory = [];
 
+        const speechLanguageMap = {
+            en: 'en-US',
+            zh: 'zh-CN',
+            'zh-TW': 'zh-TW',
+            de: 'de-DE',
+            fr: 'fr-FR'
+        };
+        const speechControlLabels = {
+            en: { play: 'Read aloud', stop: 'Stop reading' },
+            zh: { play: '朗读', stop: '停止朗读' },
+            'zh-TW': { play: '朗讀', stop: '停止朗讀' },
+            de: { play: 'Vorlesen', stop: 'Vorlesen stoppen' },
+            fr: { play: 'Lire à voix haute', stop: 'Arrêter la lecture' }
+        };
+        let activeSpeechButton = null;
+
+        function getPlainText(html) {
+            const container = document.createElement('div');
+            container.innerHTML = html;
+            return (container.textContent || container.innerText || '').trim();
+        }
+
+        function resetSpeechButton(button) {
+            if (!button) return;
+            const labels = speechControlLabels[selectedAppLanguage] || speechControlLabels.en;
+            button.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+            button.title = labels.play;
+            button.setAttribute('aria-label', labels.play);
+        }
+
+        function stopSpeech() {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
+            resetSpeechButton(activeSpeechButton);
+            activeSpeechButton = null;
+        }
+
+        function speakText(text, button) {
+            if (!('speechSynthesis' in window)) {
+                alert('Speech playback is not supported in this browser.');
+                return;
+            }
+
+            if (activeSpeechButton === button && window.speechSynthesis.speaking) {
+                stopSpeech();
+                return;
+            }
+
+            stopSpeech();
+            const plainText = getPlainText(text);
+            if (!plainText) return;
+
+            const language = speechLanguageMap[selectedAppLanguage] || 'en-US';
+            const utterance = new SpeechSynthesisUtterance(plainText);
+            utterance.lang = language;
+            utterance.rate = 0.85;
+            utterance.pitch = 1.05;
+            utterance.volume = 1;
+
+            const voices = window.speechSynthesis.getVoices();
+            const matchingVoice = voices.find(voice => voice.lang === language)
+                || voices.find(voice => voice.lang.toLowerCase().startsWith(language.split('-')[0].toLowerCase()));
+            if (matchingVoice) utterance.voice = matchingVoice;
+
+            const labels = speechControlLabels[selectedAppLanguage] || speechControlLabels.en;
+            activeSpeechButton = button;
+            button.innerHTML = '<i class="fa-solid fa-stop"></i>';
+            button.title = labels.stop;
+            button.setAttribute('aria-label', labels.stop);
+
+            const finishSpeech = () => {
+                if (activeSpeechButton === button) {
+                    resetSpeechButton(button);
+                    activeSpeechButton = null;
+                }
+            };
+            utterance.onend = finishSpeech;
+            utterance.onerror = finishSpeech;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function createSpeechButton(text) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'mt-1 ml-auto w-7 h-7 rounded-full bg-purple-50 text-purple-500 hover:bg-purple-100 hover:text-purple-700 transition-colors flex items-center justify-center';
+            resetSpeechButton(button);
+            button.addEventListener('click', () => speakText(text, button));
+            return button;
+        }
+
         function applyLanguage(lang) {
             const normalized = languageMeta[lang] ? lang : 'en';
             const t = languageMeta[normalized];
@@ -632,12 +723,9 @@
             }
 
             if (conversationHistory.length === 0) {
-                chatHistory.innerHTML = `
-                    <div class="flex justify-start fade-in">
-                        <div class="bg-white p-2 rounded-xl rounded-tl-none border border-purple-100 text-xs text-slate-600 shadow-sm">
-                            ${t.welcome}
-                        </div>
-                    </div>`;
+                stopSpeech();
+                chatHistory.innerHTML = '';
+                addMessage('ai', t.welcome, false);
             }
         }
 
@@ -656,7 +744,7 @@
 
         applyLanguage('en');
 
-        function addMessage(sender, text) {
+        function addMessage(sender, text, trackInHistory = true) {
             const div = document.createElement('div');
             div.className = `flex ${sender === 'user' ? 'justify-end' : 'justify-start'} fade-in`;
             
@@ -664,15 +752,28 @@
                 ? 'bg-purple-100 text-purple-900 rounded-tr-none border border-purple-200' 
                 : 'bg-white text-slate-600 rounded-tl-none border border-purple-100 shadow-sm';
             
-            div.innerHTML = `<div class="max-w-[85%] p-2 rounded-xl ${bubbleStyle} text-xs font-medium">${text}</div>`;
+            const bubble = document.createElement('div');
+            bubble.className = `max-w-[85%] p-2 rounded-xl ${bubbleStyle} text-xs font-medium`;
+
+            const messageContent = document.createElement('div');
+            messageContent.innerHTML = text;
+            bubble.appendChild(messageContent);
+
+            if (sender !== 'user') {
+                bubble.appendChild(createSpeechButton(text));
+            }
+
+            div.appendChild(bubble);
             chatHistory.appendChild(div);
             chatHistory.scrollTo({ top: chatHistory.scrollHeight, behavior: 'smooth' });
             
             // Track message in conversation history for drawing analysis
-            conversationHistory.push({
-                role: sender === 'user' ? 'user' : 'ai',
-                content: text.replace(/<[^>]*>/g, '') // Remove HTML tags
-            });
+            if (trackInHistory) {
+                conversationHistory.push({
+                    role: sender === 'user' ? 'user' : 'ai',
+                    content: getPlainText(text)
+                });
+            }
         }
 
         document.getElementById('done-btn').addEventListener('click', async () => {
