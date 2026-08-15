@@ -4,3 +4,4 @@ pillow
 volcengine-python-sdk[ark]
 pydantic
 python-multipart
+requests

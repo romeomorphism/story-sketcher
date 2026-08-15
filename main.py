@@ -1,8 +1,11 @@
 import os
 import base64
+import codecs
 import io
 import json
-from fastapi import FastAPI
+import uuid
+import requests
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from PIL import Image
@@ -12,6 +15,19 @@ from volcenginesdkarkruntime import Ark
 
 # 1. API Key (Prioritize environment variables for Vercel/Production)
 ARK_API_KEY = os.environ.get("ARK_API_KEY")
+
+# Doubao Seed TTS 2.0 (separate credentials from the Ark API key)
+VOLCENGINE_TTS_API_KEY = os.environ.get("VOLCENGINE_TTS_API_KEY")
+VOLCENGINE_TTS_APP_ID = os.environ.get("VOLCENGINE_TTS_APP_ID")
+VOLCENGINE_TTS_ACCESS_TOKEN = os.environ.get("VOLCENGINE_TTS_ACCESS_TOKEN")
+VOLCENGINE_TTS_RESOURCE_ID = os.environ.get("VOLCENGINE_TTS_RESOURCE_ID", "seed-tts-2.0")
+VOLCENGINE_TTS_ZH_VOICE = os.environ.get(
+    "VOLCENGINE_TTS_ZH_VOICE", "zh_female_xueayi_saturn_bigtts"
+)
+VOLCENGINE_TTS_EN_VOICE = os.environ.get(
+    "VOLCENGINE_TTS_EN_VOICE", "zh_female_vv_uranus_bigtts"
+)
+VOLCENGINE_TTS_URL = "https://openspeech.bytedance.com/api/v3/tts/unidirectional"
 
 # Model configuration
 DRAWING_MODEL = "doubao-seed-2-1-turbo-260628"
@@ -61,7 +77,7 @@ class ChatRequest(BaseModel):
 
 class TextToSpeechRequest(BaseModel):
     text: str
-    language: str = "en-US"  # Default to English
+    language: str = "en"
 
 # --- 辅助函数：处理 Base64 图片 ---
 def decode_image(base64_string):
@@ -83,6 +99,58 @@ def get_language_config(language_code: str):
     }
     selected = language_map.get(normalized, "English")
     return normalized, selected
+
+
+def decode_tts_audio_stream(response: requests.Response) -> bytes:
+    """Decode the concatenated JSON objects returned by the V3 chunked API."""
+    decoder = codecs.getincrementaldecoder("utf-8")()
+    json_decoder = json.JSONDecoder()
+    buffer = ""
+    audio_chunks = []
+    last_error = None
+
+    def consume_buffer(final=False):
+        nonlocal buffer, last_error
+        while True:
+            buffer = buffer.lstrip()
+            if not buffer:
+                return
+            try:
+                item, position = json_decoder.raw_decode(buffer)
+            except json.JSONDecodeError:
+                if final:
+                    last_error = "The TTS service returned an incomplete response."
+                return
+
+            buffer = buffer[position:]
+            if not isinstance(item, dict):
+                continue
+
+            encoded_audio = item.get("data")
+            if isinstance(encoded_audio, str) and encoded_audio:
+                try:
+                    audio_chunks.append(base64.b64decode(encoded_audio))
+                except ValueError:
+                    last_error = "The TTS service returned invalid audio data."
+
+            code = item.get("code")
+            if code not in (None, 0, 20000000):
+                last_error = item.get("message") or f"TTS service error {code}"
+
+    for chunk in response.iter_content(chunk_size=8192):
+        if chunk:
+            buffer += decoder.decode(chunk)
+            consume_buffer()
+
+    buffer += decoder.decode(b"", final=True)
+    consume_buffer(final=True)
+
+    if last_error:
+        raise ValueError(last_error)
+    audio = b"".join(audio_chunks)
+    if not audio:
+        raise ValueError("The TTS service returned no audio.")
+    return audio
 
 # --- 核心接口 ---
 
@@ -437,67 +505,91 @@ async def check_movie_status(task_id: str):
 
 
 @app.post("/api/text-to-speech")
-async def text_to_speech(request: TextToSpeechRequest):
-    """
-    Text-to-Speech API:
-    Convert text to speech audio and return as base64 encoded audio data.
-    This allows the chatbot buttons to play audio responses.
-    """
+def text_to_speech(request: TextToSpeechRequest):
+    """Generate Chinese or English MP3 audio with Doubao Seed TTS 2.0."""
     try:
-        # Import requests for TTS API call
-        import requests
-        
-        # Validate input
-        if not request.text or len(request.text.strip()) == 0:
-            return {"error": "Text cannot be empty"}
-        
-        # Truncate text if too long (TTS has character limits, typically 1000-2000 chars)
-        text_to_convert = request.text[:500]  # Limit to 500 chars for efficiency
-        
-        # Use Ark client for TTS (if available) or use a simple TTS approach
-        # For now, we'll use a text-to-speech approach via the Ark platform
-        # or external TTS service
-        
-        try:
-            # Try using Ark's TTS capability if available
-            # This is a fallback - you may need to use a dedicated TTS API
-            tts_response = ark_client.audio.speech.create(
-                model="tts-model",  # Specify TTS model
-                input=text_to_convert,
-                voice="en-US-Neural2-A",  # English voice
-                response_format="mp3"
+        text = request.text.strip()
+        if not text:
+            raise HTTPException(status_code=400, detail="Text cannot be empty.")
+
+        normalized_language = (request.language or "en").lower()
+        if normalized_language.startswith("zh"):
+            language = "zh-cn"
+            speaker = VOLCENGINE_TTS_ZH_VOICE
+            voice_instruction = "像温柔的绘本老师一样，自然、亲切、富有想象力地讲给小朋友听。吐字清晰，语速舒缓，停顿自然。"
+        elif normalized_language.startswith("en"):
+            language = "en"
+            speaker = VOLCENGINE_TTS_EN_VOICE
+            voice_instruction = "Read naturally like a warm, friendly picture-book storyteller for children. Speak clearly at a relaxed pace with expressive, natural pauses."
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Seed TTS 2.0 is enabled for Chinese and English only."
             )
-            
-            # If successful, return the audio data
-            return {
-                "success": True,
-                "audio": base64.b64encode(tts_response.content).decode('utf-8') if hasattr(tts_response, 'content') else tts_response
-            }
-        except:
-            # Fallback: Use external TTS service (like Google Cloud TTS or similar)
-            # For this example, we'll return a placeholder message
-            print("Ark TTS not available, attempting alternative TTS method...")
-            
-            # You can integrate with:
-            # 1. Google Cloud Text-to-Speech API
-            # 2. Azure Text-to-Speech API
-            # 3. Amazon Polly
-            # 4. Other TTS services
-            
-            # For now, return a simple message asking to configure TTS
-            return {
-                "success": False,
-                "message": "TTS service temporarily unavailable. Please configure a TTS API.",
-                "text": text_to_convert
-            }
-    
-    except Exception as e:
-        print(f"TTS Error: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "message": "Failed to convert text to speech"
+
+        if not VOLCENGINE_TTS_API_KEY and not (
+            VOLCENGINE_TTS_APP_ID and VOLCENGINE_TTS_ACCESS_TOKEN
+        ):
+            raise HTTPException(
+                status_code=503,
+                detail="Volcengine TTS credentials are not configured."
+            )
+
+        request_id = str(uuid.uuid4())
+        headers = {
+            "Content-Type": "application/json",
+            "X-Api-Resource-Id": VOLCENGINE_TTS_RESOURCE_ID,
+            "X-Api-Request-Id": request_id,
         }
+        if VOLCENGINE_TTS_API_KEY:
+            headers["X-Api-Key"] = VOLCENGINE_TTS_API_KEY
+        else:
+            # Both names are accepted across legacy speech-console versions.
+            headers["X-Api-App-Key"] = VOLCENGINE_TTS_APP_ID
+            headers["X-Api-App-Id"] = VOLCENGINE_TTS_APP_ID
+            headers["X-Api-Access-Key"] = VOLCENGINE_TTS_ACCESS_TOKEN
+
+        payload = {
+            "user": {"uid": "storysketcher"},
+            "req_params": {
+                "text": text[:1000],
+                "speaker": speaker,
+                "explicit_language": language,
+                "speed_ratio": 0.9,
+                "voice_instruction": voice_instruction,
+                "audio_params": {
+                    "format": "mp3",
+                    "sample_rate": 24000,
+                },
+            },
+        }
+
+        tts_response = requests.post(
+            VOLCENGINE_TTS_URL,
+            headers=headers,
+            json=payload,
+            stream=True,
+            timeout=(5, 30),
+        )
+        if not tts_response.ok:
+            log_id = tts_response.headers.get("X-Tt-Logid", "unknown")
+            print(f"Seed TTS request failed: HTTP {tts_response.status_code}, logid={log_id}")
+            raise HTTPException(status_code=502, detail="Volcengine TTS request failed.")
+
+        audio = decode_tts_audio_stream(tts_response)
+        return Response(
+            content=audio,
+            media_type="audio/mpeg",
+            headers={"Cache-Control": "private, max-age=3600"},
+        )
+    except HTTPException:
+        raise
+    except requests.RequestException as e:
+        print(f"Seed TTS network error: {e}")
+        raise HTTPException(status_code=502, detail="Could not reach Volcengine TTS.")
+    except Exception as e:
+        print(f"Seed TTS error: {e}")
+        raise HTTPException(status_code=502, detail="Failed to generate speech.")
     
 
 if __name__ == "__main__":

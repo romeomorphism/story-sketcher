@@ -616,13 +616,16 @@
             fr: 'fr-FR'
         };
         const speechControlLabels = {
-            en: { play: 'Read aloud', stop: 'Stop reading' },
-            zh: { play: '朗读', stop: '停止朗读' },
-            'zh-TW': { play: '朗讀', stop: '停止朗讀' },
-            de: { play: 'Vorlesen', stop: 'Vorlesen stoppen' },
-            fr: { play: 'Lire à voix haute', stop: 'Arrêter la lecture' }
+            en: { play: 'Read aloud', loading: 'Preparing voice', stop: 'Stop reading' },
+            zh: { play: '朗读', loading: '正在准备语音', stop: '停止朗读' },
+            'zh-TW': { play: '朗讀', loading: '正在準備語音', stop: '停止朗讀' },
+            de: { play: 'Vorlesen', loading: 'Stimme wird vorbereitet', stop: 'Vorlesen stoppen' },
+            fr: { play: 'Lire à voix haute', loading: 'Préparation de la voix', stop: 'Arrêter la lecture' }
         };
         let activeSpeechButton = null;
+        let activeAudio = null;
+        let activeSpeechRequest = null;
+        const ttsAudioCache = new Map();
 
         function getPlainText(html) {
             const container = document.createElement('div');
@@ -638,7 +641,31 @@
             button.setAttribute('aria-label', labels.play);
         }
 
+        function setSpeechButtonState(button, state) {
+            const labels = speechControlLabels[selectedAppLanguage] || speechControlLabels.en;
+            if (state === 'loading') {
+                button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+                button.title = labels.loading;
+                button.setAttribute('aria-label', labels.loading);
+            } else if (state === 'playing') {
+                button.innerHTML = '<i class="fa-solid fa-stop"></i>';
+                button.title = labels.stop;
+                button.setAttribute('aria-label', labels.stop);
+            } else {
+                resetSpeechButton(button);
+            }
+        }
+
         function stopSpeech() {
+            if (activeSpeechRequest) {
+                activeSpeechRequest.abort();
+                activeSpeechRequest = null;
+            }
+            if (activeAudio) {
+                activeAudio.pause();
+                activeAudio.currentTime = 0;
+                activeAudio = null;
+            }
             if ('speechSynthesis' in window) {
                 window.speechSynthesis.cancel();
             }
@@ -646,22 +673,12 @@
             activeSpeechButton = null;
         }
 
-        function speakText(text, button) {
+        function speakWithBrowser(plainText, button, language) {
             if (!('speechSynthesis' in window)) {
                 alert('Speech playback is not supported in this browser.');
                 return;
             }
 
-            if (activeSpeechButton === button && window.speechSynthesis.speaking) {
-                stopSpeech();
-                return;
-            }
-
-            stopSpeech();
-            const plainText = getPlainText(text);
-            if (!plainText) return;
-
-            const language = speechLanguageMap[selectedAppLanguage] || 'en-US';
             const utterance = new SpeechSynthesisUtterance(plainText);
             utterance.lang = language;
             utterance.rate = 0.85;
@@ -673,11 +690,8 @@
                 || voices.find(voice => voice.lang.toLowerCase().startsWith(language.split('-')[0].toLowerCase()));
             if (matchingVoice) utterance.voice = matchingVoice;
 
-            const labels = speechControlLabels[selectedAppLanguage] || speechControlLabels.en;
             activeSpeechButton = button;
-            button.innerHTML = '<i class="fa-solid fa-stop"></i>';
-            button.title = labels.stop;
-            button.setAttribute('aria-label', labels.stop);
+            setSpeechButtonState(button, 'playing');
 
             const finishSpeech = () => {
                 if (activeSpeechButton === button) {
@@ -688,6 +702,93 @@
             utterance.onend = finishSpeech;
             utterance.onerror = finishSpeech;
             window.speechSynthesis.speak(utterance);
+        }
+
+        function cacheTtsAudio(key, url) {
+            if (ttsAudioCache.size >= 24) {
+                const oldestKey = ttsAudioCache.keys().next().value;
+                URL.revokeObjectURL(ttsAudioCache.get(oldestKey));
+                ttsAudioCache.delete(oldestKey);
+            }
+            ttsAudioCache.set(key, url);
+        }
+
+        async function speakText(text, button) {
+            if (activeSpeechButton === button) {
+                stopSpeech();
+                return;
+            }
+
+            stopSpeech();
+            const plainText = getPlainText(text);
+            if (!plainText) return;
+
+            const language = speechLanguageMap[selectedAppLanguage] || 'en-US';
+            const useSeedTts = selectedAppLanguage === 'en'
+                || selectedAppLanguage === 'zh'
+                || selectedAppLanguage === 'zh-TW';
+
+            if (!useSeedTts) {
+                speakWithBrowser(plainText, button, language);
+                return;
+            }
+
+            activeSpeechButton = button;
+            setSpeechButtonState(button, 'loading');
+            const controller = new AbortController();
+            activeSpeechRequest = controller;
+
+            try {
+                const cacheKey = `${selectedAppLanguage}:${plainText}`;
+                let audioUrl = ttsAudioCache.get(cacheKey);
+                if (!audioUrl) {
+                    const response = await fetch(`${API_URL}/text-to-speech`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            text: plainText,
+                            language: selectedAppLanguage
+                        }),
+                        signal: controller.signal
+                    });
+                    if (!response.ok) {
+                        throw new Error(`Seed TTS request failed (${response.status})`);
+                    }
+                    const audioBlob = await response.blob();
+                    if (!audioBlob.size) throw new Error('Seed TTS returned empty audio');
+                    audioUrl = URL.createObjectURL(audioBlob);
+                    cacheTtsAudio(cacheKey, audioUrl);
+                }
+
+                if (activeSpeechRequest !== controller) return;
+                activeSpeechRequest = null;
+                const audio = new Audio(audioUrl);
+                activeAudio = audio;
+                setSpeechButtonState(button, 'playing');
+
+                const finishAudio = () => {
+                    if (activeAudio === audio) activeAudio = null;
+                    if (activeSpeechButton === button) {
+                        resetSpeechButton(button);
+                        activeSpeechButton = null;
+                    }
+                };
+                audio.onended = finishAudio;
+                audio.onerror = finishAudio;
+                await audio.play();
+            } catch (error) {
+                if (error.name === 'AbortError') return;
+                console.warn('Seed TTS unavailable; using browser speech fallback.', error);
+                if (activeSpeechRequest === controller) activeSpeechRequest = null;
+                if (activeSpeechButton === button) {
+                    if (activeAudio) {
+                        activeAudio.pause();
+                        activeAudio = null;
+                    }
+                    activeSpeechButton = null;
+                    speakWithBrowser(plainText, button, language);
+                }
+            }
         }
 
         function createSpeechButton(text) {
